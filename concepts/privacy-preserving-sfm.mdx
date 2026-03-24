@@ -1,0 +1,122 @@
+---
+title: "Privacy Preserving SfM"
+description: "How PP-SfM replaces keypoint positions with line features to protect image content from reconstruction servers."
+---
+
+## The privacy problem in standard SfM
+
+In a standard Structure-from-Motion pipeline, feature extraction runs on a device and the resulting keypoint positions are sent to a server for matching and reconstruction. A keypoint position is an exact 2D pixel coordinate — it encodes precisely where in the image a distinctive point was found.
+
+This creates a privacy risk: a server that receives keypoint positions can use them to infer image content. Dense sets of keypoints reveal the locations of faces, vehicles, license plates, and other sensitive subjects in the scene.
+
+<Note>
+  This problem is especially significant for crowd-sourced mapping applications, where images from many users are uploaded to a central service for 3D reconstruction.
+</Note>
+
+## The solution: line features
+
+PP-SfM replaces each keypoint position with a **line**. Instead of sending the point `(x, y)` to the server, the client sends a line `l = (a, b, c)^T` in homogeneous 2D line form such that the original keypoint lies on the line:
+
+```
+a·x + b·y + c = 0
+```
+
+The line passes through the original keypoint, but infinitely many lines pass through any given point. The server receives the line without learning the keypoint's exact location. The exact pixel position — which might reveal a person's face or a vehicle — remains on the client device.
+
+Geometric reasoning about the 3D scene is still possible because matched lines from multiple images constrain camera poses and 3D point positions, even without exact keypoint coordinates.
+
+## Coordinate system convention
+
+PP-SfM uses the standard computer vision coordinate convention:
+
+- **x** points right
+- **y** points down
+- **z** points forward (into the image plane)
+
+Gravity vectors are expressed in this camera coordinate system. For example, a camera held upright on flat ground has a gravity vector close to `(0, 1, 0)` — pointing in the positive y direction.
+
+## Aligned and unaligned lines
+
+Not all lines carry the same geometric information. PP-SfM distinguishes two types:
+
+<CardGroup cols={2}>
+  <Card title="Aligned lines" icon="arrow-down">
+    Lines that are **parallel to the gravity direction** in the image. These are flagged with `IsAligned() == true`. Because their orientation is constrained by gravity, aligned lines provide stronger geometric constraints and are essential for the 4-view initialization step.
+  </Card>
+  <Card title="Unaligned lines" icon="minus">
+    Lines with an arbitrary orientation — not parallel to gravity. These are flagged with `IsAligned() == false`. They still constrain the reconstruction but do not carry the additional gravity-direction constraint.
+  </Card>
+</CardGroup>
+
+A line is marked as aligned when it is generated from a keypoint whose associated line direction is parallel to the projected gravity direction in the image plane. The `IsAligned()` method on `FeatureLine` exposes this flag.
+
+## 4-view initialization
+
+Standard two-view SfM initialization does not work directly with line features because lines underconstrain the problem compared to point matches. PP-SfM uses a **4-view initialization** approach instead.
+
+The initializer (`src/init/initializer.h`) requires:
+
+- At least 4 images with overlapping views
+- Tracks that contain both **aligned** and **unaligned** line observations
+- Gravity direction for each image
+
+The process works in two stages:
+
+<Steps>
+  <Step title="2D SfM from aligned tracks">
+    Aligned line tracks — lines parallel to gravity — are used to solve a reduced 2D reconstruction problem. Because gravity constrains the line orientations, the pipeline can recover relative camera poses in the plane perpendicular to gravity using the `FourView2dEstimator` (defined in `src/init/sfm2d.h`). The minimal solver requires 5 point correspondences across 4 views.
+  </Step>
+  <Step title="Planar offset estimation">
+    The `PlanarOffsetEstimator` uses the unaligned tracks together with the gravity-rotation matrices to recover the full 3D translation components, lifting the 2D reconstruction into 3D. The minimal solver requires 3 correspondences.
+  </Step>
+  <Step title="Incremental registration">
+    With the 4-view seed reconstruction established, additional images are registered incrementally using `RegisterNextImage`. Each new image is localized by solving for its pose given the existing 3D line observations.
+  </Step>
+</Steps>
+
+<Note>
+  The initialization requires that the initial image set contains tracks with both aligned and unaligned lines. If your scene lacks clear gravity-aligned structures, the initialization may fail to find a valid seed reconstruction. Provide gravity direction files (`.gravity.txt`) for all images to enable this step.
+</Note>
+
+## Required inputs
+
+To run the privacy-preserving pipeline you must supply two extra files per image alongside the image itself:
+
+| File | Purpose |
+|---|---|
+| `<image>.gravity.txt` | Gravity vector in camera coordinates (space-separated, pointing downward) |
+| `<image>.camera_model.txt` | Camera model name and parameters (e.g. `OPENCV fx, fy, cx, cy, k1, k2, p1, p2`) |
+
+The gravity file contains a single line with the 3-vector pointing in the direction of gravitational acceleration expressed in the camera coordinate frame. For example:
+
+```text
+0.022717 0.999539 -0.020155
+```
+
+## Citation
+
+If you use PP-SfM in scientific work, please cite both the original PP-SfM paper and the COLMAP paper on which it is based:
+
+```bibtex
+@inproceedings{Geppert2020ECCV,
+  author    = {Marcel Geppert and
+               Viktor Larsson and
+               Pablo Speciale and
+               Johannes L. Sch{\"o}nberger and
+               Marc Pollefeys},
+  title     = {Privacy Preserving Structure-from-Motion},
+  booktitle = {European Conference on Computer Vision (ECCV)},
+  year      = {2020},
+}
+
+@inproceedings{schoenberger2016sfm,
+  author={Sch\"onberger, Johannes Lutz and Frahm, Jan-Michael},
+  title={Structure-from-Motion Revisited},
+  booktitle={Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year={2016},
+}
+```
+
+<Note>
+  This repository is not the exact code used to generate paper results. It is a cleaned-up version released for reproducibility and research use.
+</Note>

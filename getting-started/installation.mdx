@@ -1,0 +1,124 @@
+---
+title: "Installation"
+description: "Build PP-SfM from source on Ubuntu 18.04."
+---
+
+PP-SfM is built from source and tested on **Ubuntu 18.04**. The build process closely follows standard COLMAP.
+
+<Warning>
+  Install targets have been deliberately removed from the build system to avoid
+  conflicts with a standard COLMAP installation you may already have on your
+  system. The binary runs directly from the build directory.
+</Warning>
+
+## Build steps
+
+<Steps>
+  <Step title="Install system dependencies">
+    Install all required system packages with `apt`:
+
+    ```bash
+    sudo apt install \
+        cuda \
+        git \
+        cmake \
+        build-essential \
+        libboost-program-options-dev \
+        libboost-filesystem-dev \
+        libboost-graph-dev \
+        libboost-regex-dev \
+        libboost-system-dev \
+        libboost-test-dev \
+        libeigen3-dev \
+        libsuitesparse-dev \
+        libfreeimage-dev \
+        libgoogle-glog-dev \
+        libgflags-dev \
+        libglew-dev \
+        qtbase5-dev \
+        libqt5opengl5-dev
+    ```
+  </Step>
+
+  <Step title="Clone and build Ceres Solver">
+    PP-SfM requires Ceres Solver. Build and install it from source:
+
+    ```bash
+    sudo apt install libatlas-base-dev libsuitesparse-dev
+    git clone https://ceres-solver.googlesource.com/ceres-solver
+    cd ceres-solver
+    git checkout $(git describe --tags) # Checkout the latest release
+    mkdir build
+    cd build
+    cmake .. -DBUILD_TESTING=OFF -DBUILD_EXAMPLES=OFF
+    make -j
+    sudo make install
+    ```
+  </Step>
+
+  <Step title="Clone and build PP-SfM">
+    Clone the repository with its submodules, then build:
+
+    ```bash
+    git clone --recurse-submodule https://github.com/colmap/privacy_preserving_sfm
+    cd privacy_preserving_sfm
+    mkdir build
+    cd build
+    cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo
+    make -j8
+    ```
+
+    <Note>
+      The `--recurse-submodule` flag is required. Without it, the third-party
+      libraries under `lib/` will be missing and the build will fail.
+    </Note>
+  </Step>
+
+  <Step title="Verify the installation">
+    Launch the GUI from within the build directory to confirm everything compiled correctly:
+
+    ```bash
+    src/exe/ppsfm gui
+    ```
+
+    If the PP-SfM window opens, your build is working.
+  </Step>
+</Steps>
+
+## Build options
+
+You can customize the build by passing `-D<OPTION>=ON|OFF` flags to `cmake`. The following options are available:
+
+| Option | Default | Description |
+|---|---|---|
+| `SIMD_ENABLED` | `ON` | Enable SIMD CPU optimizations |
+| `OPENMP_ENABLED` | `ON` | Enable OpenMP multi-threading |
+| `IPO_ENABLED` | `ON` | Enable interprocedural (link-time) optimization |
+| `CUDA_ENABLED` | `ON` | Enable CUDA GPU acceleration, if a compatible GPU is found |
+| `OPENGL_ENABLED` | `ON` | Enable OpenGL rendering support |
+| `CUDA_ARCHS` | `Auto` | CUDA architectures to target (e.g., `Auto`, `All`, `Maxwell`, `Pascal`) |
+
+<Note>
+  CUDA is optional but recommended. When CUDA is available, feature extraction
+  and matching run on the GPU and are significantly faster. If no compatible GPU
+  is detected, the build falls back to CPU automatically.
+</Note>
+
+### CMake examples
+
+<CodeGroup>
+
+```bash With CUDA (recommended)
+cmake .. \
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DCUDA_ENABLED=ON \
+  -DCUDA_ARCHS=Auto
+```
+
+```bash Without CUDA (CPU only)
+cmake .. \
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DCUDA_ENABLED=OFF
+```
+
+</CodeGroup>

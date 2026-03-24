@@ -1,0 +1,102 @@
+---
+title: "line_initializer"
+description: "Run the 4-view line-based reconstruction initialisation as a standalone step"
+---
+
+The `line_initializer` command runs the PP-SfM 4-view initialisation procedure in isolation. It searches for a suitable set of four images with both gravity-aligned and unaligned line tracks, estimates initial camera poses using the line-based solver, and writes the resulting sparse reconstruction to disk.
+
+This command is primarily useful for debugging the initialisation stage or experimenting with initialisation parameters without running the full incremental mapper.
+
+## Usage
+
+```bash
+ppsfm line_initializer \
+  --database_path DATABASE \
+  --gravity_path GRAVITY \
+  --model_output_path OUTPUT \
+  [options]
+```
+
+## Required options
+
+<ParamField path="database_path" type="string" required>
+  Path to an existing SQLite database containing extracted line features and matches. The file must already exist; the command does not create a new database.
+</ParamField>
+
+<ParamField path="gravity_path" type="string" required>
+  Path to a `gravity.txt` file containing per-image gravity direction vectors. See the [gravity direction format](/formats/gravity-direction) page for the full specification.
+</ParamField>
+
+<ParamField path="model_output_path" type="string" required>
+  Path to the directory where the initialised reconstruction will be written in text format (`cameras.txt`, `images.txt`, `points3D.txt`). The directory must already exist.
+</ParamField>
+
+## Initialisation quality options
+
+<ParamField path="max_reprojection_error" type="number" default="5.0">
+  Maximum reprojection error in pixels used to evaluate inliers when estimating the initial camera poses. Corresponds to `IncrementalMapper.Options::init_max_error`.
+</ParamField>
+
+<ParamField path="min_triangulation_angle" type="number" default="2.0">
+  Minimum triangulation angle in degrees required for a line track to be considered a valid constraint during initialisation. Corresponds to `IncrementalMapper.Options::init_min_tri_angle`.
+</ParamField>
+
+<ParamField path="min_num_inliers" type="number" default="20">
+  Minimum number of inlier tracks required for an initialisation attempt to be accepted. Corresponds to `IncrementalMapper.Options::init_min_num_inliers`.
+</ParamField>
+
+## Gravity file format
+
+The gravity file is a plain-text file with one entry per line:
+
+```
+# image_id image_name gx gy gz
+1 frame_0001.jpg 0.012 -0.998 0.063
+2 frame_0002.jpg 0.011 -0.997 0.071
+```
+
+Each line contains:
+- `image_id` — integer database image ID
+- `image_name` — image filename matching the name stored in the database
+- `gx gy gz` — unit gravity direction vector in the camera coordinate frame
+
+Blank lines and lines starting with `#` are ignored.
+
+## How it works
+
+The initialiser:
+
+1. Loads gravity vectors and identifies images with gravity-aligned line features.
+2. Samples up to 10 candidate 4-image sets, preferring sets with the most gravity-aligned tracks.
+3. For each candidate set, calls the 4-view line-based pose solver and scores the result by inlier ratio.
+4. Registers the best-scoring 4-image pose set and writes the reconstruction.
+
+<Note>
+  The initialiser internally checks candidate sets up to a maximum of 10 tries (`max_num_init_tries = 10`). If none of the candidates yield a sufficient number of inliers, the command exits with an error.
+</Note>
+
+## Example
+
+Run the initialiser with default quality thresholds:
+
+```bash
+ppsfm line_initializer \
+  --database_path data/database.db \
+  --gravity_path data/gravity.txt \
+  --model_output_path results/init
+```
+
+Relax the reprojection error threshold for a noisier dataset:
+
+```bash
+ppsfm line_initializer \
+  --database_path data/database.db \
+  --gravity_path data/gravity.txt \
+  --model_output_path results/init \
+  --max_reprojection_error 8.0 \
+  --min_num_inliers 10
+```
+
+<Tip>
+  After running `line_initializer` successfully, you can pass `results/init` as `--input_path` to the `mapper` command to continue incremental reconstruction from the initialised 4-image model.
+</Tip>

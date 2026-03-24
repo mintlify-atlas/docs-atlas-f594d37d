@@ -1,0 +1,94 @@
+---
+title: "sequential_matcher"
+description: "Match features between consecutive images in an ordered video sequence"
+---
+
+The `sequential_matcher` command matches SIFT features between images that are close to each other in sequence order (determined by ascending image name). It is designed for video or time-lapse captures where consecutive frames are expected to share significant overlap.
+
+Because it only attempts matches within a sliding window around each image, this matcher is substantially faster than `exhaustive_matcher` for large ordered collections.
+
+## Usage
+
+```bash
+ppsfm sequential_matcher \
+  --database_path DATABASE \
+  [options]
+```
+
+## Required options
+
+<ParamField path="database_path" type="string" required>
+  Path to the SQLite database containing the extracted features. The database must exist and already contain features written by `feature_extractor`.
+</ParamField>
+
+## Sequential matching options
+
+<ParamField path="SequentialMatching.overlap" type="number" default="10">
+  Number of neighbouring images on each side of the current image to match against. An overlap of 10 means each image is matched against the 10 images before it and the 10 images after it in sorted order.
+</ParamField>
+
+<ParamField path="SequentialMatching.quadratic_overlap" type="boolean" default="true">
+  When `true`, each image is also matched against images at quadratic offsets (2¹, 2², 2³, …) in addition to the linear neighbourhood defined by `overlap`. This improves loop closure detection without a large increase in cost.
+</ParamField>
+
+## SIFT matching options
+
+All options below are prefixed `SiftMatching.` on the command line.
+
+<ParamField path="SiftMatching.num_threads" type="number" default="-1">
+  Number of CPU threads for matching and geometric verification. `-1` uses all available cores.
+</ParamField>
+
+<ParamField path="SiftMatching.use_gpu" type="boolean" default="true">
+  Whether to use the GPU for SIFT descriptor matching.
+</ParamField>
+
+<ParamField path="SiftMatching.gpu_index" type="string" default="-1">
+  Index of the GPU to use. Separate multiple indices with commas. `-1` selects all available GPUs.
+</ParamField>
+
+<ParamField path="SiftMatching.max_ratio" type="number" default="0.8">
+  Lowe's ratio test threshold. A match is accepted only when the distance to the best match divided by the distance to the second-best match is below this value.
+</ParamField>
+
+<ParamField path="SiftMatching.max_distance" type="number" default="0.7">
+  Maximum descriptor distance for a match to be accepted.
+</ParamField>
+
+<ParamField path="SiftMatching.cross_check" type="boolean" default="true">
+  When `true`, a match is kept only when image A's best match in image B is also image B's best match in image A.
+</ParamField>
+
+<ParamField path="SiftMatching.max_num_matches" type="number" default="32768">
+  Maximum number of matches retained per image pair before geometric verification.
+</ParamField>
+
+<ParamField path="SiftMatching.min_num_matches" type="number" default="15">
+  Minimum number of inlier matches required after geometric verification for a pair to be considered valid.
+</ParamField>
+
+## Example
+
+Match a video sequence with the default overlap window:
+
+```bash
+ppsfm sequential_matcher \
+  --database_path data/database.db
+```
+
+Increase the overlap and disable quadratic neighbours for a dense video sequence:
+
+```bash
+ppsfm sequential_matcher \
+  --database_path data/database.db \
+  --SequentialMatching.overlap 20 \
+  --SequentialMatching.quadratic_overlap 0
+```
+
+<Note>
+  Sequential order is determined by sorting image names in ascending lexicographic order. Ensure your frame filenames are zero-padded so that the sort order matches capture order (e.g. `frame_0001.jpg`, `frame_0002.jpg`).
+</Note>
+
+<Tip>
+  For scenes with large loops or long sequences, enable `quadratic_overlap` to give the matcher a chance to close loops without dramatically increasing the number of pairs.
+</Tip>

@@ -1,0 +1,267 @@
+---
+title: "Incremental reconstruction"
+description: "Run the PP-SfM mapper to initialize from four images and grow a 3D reconstruction incrementally."
+---
+
+The reconstruction stage takes the feature lines and matches stored in the database and produces a 3D model: registered camera poses and a sparse set of triangulated 3D points.
+
+PP-SfM uses the `IncrementalMapperController`, which orchestrates initialization with the 4-view initializer followed by incremental registration of additional images.
+
+## Reconstruction process
+
+<Steps>
+  <Step title="Load database">
+    The mapper reads all images, feature lines, and matches from the database into a `DatabaseCache`. A separate `aligned_db_cache` is populated with only the images that have gravity-aligned line features — these are used exclusively during initialization.
+  </Step>
+
+  <Step title="4-view initialization">
+    PP-SfM requires **four seed images** to start a reconstruction, unlike standard COLMAP which uses two. The `init::initialize_reconstruction` function receives:
+
+    - Four sets of `FeatureLines` — one per image — containing both gravity-aligned and unaligned lines.
+    - The gravity direction vector for each of the four images.
+    - `InitOptions` with thresholds for triangulation angle, inlier count, and reprojection error.
+
+    The initializer assembles 4-view tracks from the correspondence graph and finds the image set that maximizes aligned track count (minimum 20 aligned tracks and 20 unaligned tracks required). Up to 10 candidate image sets are tried; the one with the best inlier ratio is selected.
+
+    Output: initial poses for the four seed images as `init::Pose` (a 3×4 projection matrix).
+  </Step>
+
+  <Step title="Triangulate seed images">
+    With the four initial camera poses registered, the mapper triangulates 3D points from the matched line features visible in the seed images.
+  </Step>
+
+  <Step title="Register next images">
+    `IncrementalMapper::FindNextImages` selects the unregistered image with the most visible 3D points (using `MAX_VISIBLE_POINTS_RATIO` by default — chosen because min-uncertainty selection does not work well with line features). `RegisterNextImage` estimates its absolute pose and adds it to the reconstruction.
+  </Step>
+
+  <Step title="Local bundle adjustment">
+    After each new image is registered, `AdjustLocalBundle` refines the `ba_local_num_images` most recently registered images and their visible 3D points. This keeps the model consistent without the cost of a full global solve after every image.
+  </Step>
+
+  <Step title="Global bundle adjustment">
+    A global BA pass is triggered whenever the number of registered images or 3D points grows by a configured ratio (`ba_global_images_ratio`, `ba_global_points_ratio`) or frequency (`ba_global_images_freq`, `ba_global_points_freq`). Global BA uses Ceres Solver to jointly refine all cameras and points.
+  </Step>
+
+  <Step title="Write sub-model">
+    When a sub-model finishes (no more images can be registered), it is written to a numbered subdirectory under `--output_path` (e.g. `output/0/`, `output/1/`). A `project.ini` file is also written alongside the model.
+  </Step>
+</Steps>
+
+## Commands
+
+### `ppsfm mapper`
+
+Runs the full incremental reconstruction pipeline.
+
+```bash
+ppsfm mapper \
+  --database_path DATABASE \
+  --image_path IMAGES \
+  --output_path OUTPUT \
+  [--input_path EXISTING_MODEL] \
+  [--image_list_path LIST] \
+  [options]
+```
+
+#### Path options
+
+<ParamField path="--database_path" type="string" required>
+  Path to the SQLite database file containing feature lines and matches.
+</ParamField>
+
+<ParamField path="--image_path" type="string" required>
+  Root directory containing the input images.
+</ParamField>
+
+<ParamField path="--output_path" type="string" required>
+  Directory where sub-model folders are written. Must already exist. Each completed sub-model is written to a numbered sub-directory (`0/`, `1/`, …).
+</ParamField>
+
+<ParamField path="--input_path" type="string">
+  Path to an existing reconstruction to continue from. When set, the mapper extends the existing model rather than starting fresh and writes the result directly into `--output_path` (no sub-directory numbering).
+</ParamField>
+
+<ParamField path="--image_list_path" type="string">
+  Path to a plain-text file listing image names to reconstruct, one per line. Images not in this list are ignored.
+</ParamField>
+
+#### Mapper options (`--Mapper.*`)
+
+<ParamField path="--Mapper.min_num_matches" type="int" default="15">
+  Minimum number of inlier matches for an image pair to be included in the correspondence graph.
+</ParamField>
+
+<ParamField path="--Mapper.multiple_models" type="bool" default="true">
+  Allow reconstruction of multiple disconnected sub-models from the same scene graph.
+</ParamField>
+
+<ParamField path="--Mapper.max_num_models" type="int" default="50">
+  Maximum number of sub-models to reconstruct.
+</ParamField>
+
+<ParamField path="--Mapper.max_model_overlap" type="int" default="20">
+  Maximum number of images shared between the current sub-model and any previously completed sub-model before reconstruction stops.
+</ParamField>
+
+<ParamField path="--Mapper.min_model_size" type="int" default="10">
+  Minimum number of registered images for a sub-model to be kept. Smaller models are discarded.
+</ParamField>
+
+<ParamField path="--Mapper.init_num_trials" type="int" default="200">
+  Number of initialization attempts before giving up on starting a new sub-model.
+</ParamField>
+
+<ParamField path="--Mapper.extract_colors" type="bool" default="false">
+  Extract RGB colors for reconstructed 3D points from the source images.
+</ParamField>
+
+<ParamField path="--Mapper.num_threads" type="int" default="-1">
+  Number of threads used during reconstruction. Set to `-1` to use all available cores.
+</ParamField>
+
+<ParamField path="--Mapper.fix_existing_images" type="bool" default="false">
+  When continuing from an existing reconstruction (`--input_path`), hold the existing image poses fixed and only register new images.
+</ParamField>
+
+#### Initialization options (`--Mapper.init_*`)
+
+<ParamField path="--Mapper.init_min_num_inliers" type="int" default="20">
+  Minimum number of inlier line tracks required to accept a 4-view initialization.
+</ParamField>
+
+<ParamField path="--Mapper.init_max_error" type="float" default="5.0">
+  Maximum reprojection error in pixels for line correspondences during initialization.
+</ParamField>
+
+<ParamField path="--Mapper.init_min_tri_angle" type="float" default="2.0">
+  Minimum triangulation angle in degrees for the initialization to be considered valid.
+</ParamField>
+
+#### Registration options (`--Mapper.abs_pose_*`)
+
+<ParamField path="--Mapper.abs_pose_max_error" type="float" default="12.0">
+  Maximum reprojection error in pixels for absolute pose estimation when registering a new image.
+</ParamField>
+
+<ParamField path="--Mapper.abs_pose_min_num_inliers" type="int" default="30">
+  Minimum number of inliers required for a successful absolute pose estimate.
+</ParamField>
+
+<ParamField path="--Mapper.abs_pose_min_inlier_ratio" type="float" default="0.25">
+  Minimum fraction of correspondences that must be inliers for absolute pose estimation.
+</ParamField>
+
+#### Bundle adjustment options (`--Mapper.ba_*`)
+
+<ParamField path="--Mapper.ba_local_num_images" type="int" default="6">
+  Number of most-recently-registered images to include in each local bundle adjustment solve.
+</ParamField>
+
+<ParamField path="--Mapper.ba_local_max_num_iterations" type="int" default="25">
+  Maximum Ceres iterations per local bundle adjustment solve.
+</ParamField>
+
+<ParamField path="--Mapper.ba_global_images_ratio" type="float" default="1.1">
+  Trigger global bundle adjustment when the number of registered images grows by this ratio since the last global BA.
+</ParamField>
+
+<ParamField path="--Mapper.ba_global_points_ratio" type="float" default="1.1">
+  Trigger global bundle adjustment when the number of 3D points grows by this ratio since the last global BA.
+</ParamField>
+
+<ParamField path="--Mapper.ba_global_images_freq" type="int" default="500">
+  Additionally trigger global bundle adjustment every N registered images.
+</ParamField>
+
+<ParamField path="--Mapper.ba_global_points_freq" type="int" default="250000">
+  Additionally trigger global bundle adjustment every N new 3D points.
+</ParamField>
+
+<ParamField path="--Mapper.ba_global_max_num_iterations" type="int" default="50">
+  Maximum Ceres iterations per global bundle adjustment solve.
+</ParamField>
+
+<ParamField path="--Mapper.ba_refine_focal_length" type="bool" default="false">
+  Optimize the focal length during bundle adjustment.
+</ParamField>
+
+<ParamField path="--Mapper.ba_refine_principal_point" type="bool" default="false">
+  Optimize the principal point during bundle adjustment.
+</ParamField>
+
+<ParamField path="--Mapper.ba_refine_extra_params" type="bool" default="false">
+  Optimize distortion and other extra camera parameters during bundle adjustment.
+</ParamField>
+
+#### Filtering options
+
+<ParamField path="--Mapper.filter_max_reproj_error" type="float" default="4.0">
+  Maximum reprojection error in pixels for a 3D point observation to be kept.
+</ParamField>
+
+<ParamField path="--Mapper.filter_min_tri_angle" type="float" default="1.5">
+  Minimum triangulation angle in degrees for a 3D point to be considered stable.
+</ParamField>
+
+<ParamField path="--Mapper.max_reg_trials" type="int" default="3">
+  Maximum number of times the mapper will attempt to register the same image before giving up.
+</ParamField>
+
+---
+
+### `ppsfm line_initializer`
+
+Runs only the 4-view initialization step and writes the resulting poses without growing the model further. Useful for debugging initialization or pre-computing seed poses.
+
+```bash
+ppsfm line_initializer \
+  --database_path DATABASE \
+  --gravity_path GRAVITY_FILE \
+  --model_output_path OUTPUT_DIR \
+  [options]
+```
+
+<ParamField path="--database_path" type="string" required>
+  Path to the SQLite database file. Must already exist and contain feature lines.
+</ParamField>
+
+<ParamField path="--gravity_path" type="string" required>
+  Path to the `gravity.txt` file. Each line has the format: `image_id image_name gx gy gz`. See [Gravity direction format](/formats/gravity-direction).
+</ParamField>
+
+<ParamField path="--model_output_path" type="string" required>
+  Directory where the initialized reconstruction (cameras, images, and empty points3D) is written in text format.
+</ParamField>
+
+<ParamField path="--max_reprojection_error" type="float" default="5.0">
+  Maximum reprojection error in pixels used by `InitOptions::max_error` during 4-view initialization.
+</ParamField>
+
+<ParamField path="--min_triangulation_angle" type="float" default="2.0">
+  Minimum mean triangulation angle in degrees (`InitOptions::min_tri_angle`) required to accept an initialization.
+</ParamField>
+
+<ParamField path="--min_num_inliers" type="float" default="6">
+  Minimum number of inlier line tracks (`InitOptions::min_num_inliers`) required to accept an initialization.
+</ParamField>
+
+<Note>
+  The `line_initializer` command randomly selects up to 10 candidate 4-image sets (from a pool of up to 10 images with the most aligned tracks) and chooses the set with the best inlier ratio. Results may vary between runs due to this random selection.
+</Note>
+
+## Output format
+
+Each completed sub-model is written to a numbered subdirectory:
+
+```
+output/
+  0/
+    cameras.bin
+    images.bin
+    points3D.bin
+    project.ini
+  1/
+    ...
+```
+
+When continuing from an existing reconstruction (`--input_path`), the result is written directly into `--output_path` without sub-directory numbering.

@@ -1,0 +1,173 @@
+---
+title: "Feature extraction"
+description: "How SIFT keypoints are extracted and converted into privacy-preserving line features."
+---
+
+Feature extraction is the first stage of the PP-SfM pipeline. The `SiftFeatureExtractor` reads every image in your image directory, runs SIFT detection, then converts the detected keypoints into **line features** before writing them to the database. The original keypoint positions are never stored.
+
+## How it works
+
+### SIFT detection
+
+The extractor uses the standard SIFT algorithm to detect keypoints and compute 128-dimensional descriptors. When a CUDA-capable GPU is available, the SiftGPU library accelerates both detection and descriptor computation. On CPU-only builds, the extractor falls back to an OpenGL-based or pure CPU implementation.
+
+Keypoints are detected at multiple scales across an image pyramid. Each keypoint has a position, scale, and orientation. The descriptor encodes the local gradient statistics around the keypoint.
+
+### From keypoints to lines
+
+After SIFT detection, `LineFeatureWriterThread` converts each keypoint into a line feature. A line passing through a 2D point is parameterized by its angle and a 1D signed distance from the image center — enough information to constrain 3D reconstruction geometry without revealing the exact pixel coordinate.
+
+The `aligned_line_ratio` parameter (set internally during extraction) controls what fraction of lines are marked as gravity-aligned versus randomly oriented. Gravity-aligned lines are those whose orientation matches the projected gravity direction in the image.
+
+### Gravity alignment
+
+Each line is tested against the gravity direction for its image. If the line orientation is within a threshold of the projected gravity direction, it is flagged as **aligned** (`IsAligned() == true`). Aligned lines participate in the dedicated gravity-constrained track formation during 4-view initialization and provide tighter geometric constraints throughout reconstruction.
+
+You must supply per-image gravity directions (in a `gravity.txt` file) before running the mapper. See the [Gravity direction format](/formats/gravity-direction) page for the expected file format.
+
+### Camera model verification
+
+Before extraction begins, the pipeline validates your camera model with `VerifyCameraParams`. If you supply `--ImageReader.camera_params`, the parameter count must match the chosen model. If the camera model name is not recognized, extraction fails immediately with an error message.
+
+## Command
+
+```bash
+ppsfm feature_extractor \
+  --database_path DATABASE \
+  --image_path IMAGES \
+  [--image_list_path LIST] \
+  [options]
+```
+
+### Path options
+
+<ParamField path="--database_path" type="string" required>
+  Path to the SQLite database file. The file is created if it does not exist.
+</ParamField>
+
+<ParamField path="--image_path" type="string" required>
+  Root directory containing the input images. Sub-directories are scanned recursively.
+</ParamField>
+
+<ParamField path="--image_list_path" type="string">
+  Path to a plain-text file listing images to process, one relative path per line. If omitted, all images under `--image_path` are processed.
+</ParamField>
+
+### Camera options (`--ImageReader.*`)
+
+<ParamField path="--ImageReader.camera_model" type="string" default="SIMPLE_RADIAL">
+  Camera model to use for all images. Supported values include `SIMPLE_PINHOLE`, `PINHOLE`, `SIMPLE_RADIAL`, `RADIAL`, `OPENCV`, `OPENCV_FISHEYE`, `FULL_OPENCV`, `FOV`, `SIMPLE_RADIAL_FISHEYE`, `RADIAL_FISHEYE`, `THIN_PRISM_FISHEYE`. If EXIF data is present, the focal length is read from the image.
+</ParamField>
+
+<ParamField path="--ImageReader.camera_params" type="string" default="">
+  Comma-separated camera intrinsic parameters. If empty, parameters are estimated from EXIF focal length data. The number and meaning of parameters depends on the chosen camera model.
+</ParamField>
+
+<ParamField path="--ImageReader.default_focal_length_factor" type="float" default="1.2">
+  When no EXIF focal length is available, the focal length is set to `default_focal_length_factor * max(width, height)`.
+</ParamField>
+
+<ParamField path="--ImageReader.mask_path" type="string" default="">
+  Path to a folder containing per-image masks. Mask images must mirror the sub-path structure of `--image_path` with a `.png` extension appended. Features are not extracted in masked (black) regions.
+</ParamField>
+
+<ParamField path="--ImageReader.camera_mask_path" type="string" default="">
+  Path to a single mask image applied to all images. Features are not extracted in black regions of this mask.
+</ParamField>
+
+<ParamField path="--ImageReader.existing_camera_id" type="int" default="-1">
+  ID of an existing camera in the database to assign to all images. When set, `--ImageReader.camera_model` and `--ImageReader.camera_params` are ignored.
+</ParamField>
+
+### SIFT extraction options (`--SiftExtraction.*`)
+
+<ParamField path="--SiftExtraction.use_gpu" type="bool" default="true">
+  Use the GPU for SIFT feature extraction. Requires a CUDA build or an OpenGL context.
+</ParamField>
+
+<ParamField path="--SiftExtraction.gpu_index" type="string" default="-1">
+  Index of the GPU to use. Separate multiple indices with commas for multi-GPU extraction, e.g. `"0,1,2,3"`. Set to `-1` to use all available GPUs.
+</ParamField>
+
+<ParamField path="--SiftExtraction.num_threads" type="int" default="-1">
+  Number of CPU threads for feature extraction. Set to `-1` to use all available cores.
+</ParamField>
+
+<ParamField path="--SiftExtraction.max_image_size" type="int" default="3200">
+  Maximum image dimension in pixels. Images larger than this are down-scaled before extraction.
+</ParamField>
+
+<ParamField path="--SiftExtraction.max_num_features" type="int" default="8192">
+  Maximum number of features to detect per image. When more features are found, only the largest-scale ones are kept.
+</ParamField>
+
+<ParamField path="--SiftExtraction.first_octave" type="int" default="-1">
+  Index of the first octave in the scale pyramid. A value of `-1` upsamples the image by one level before building the pyramid, which detects finer detail.
+</ParamField>
+
+<ParamField path="--SiftExtraction.num_octaves" type="int" default="4">
+  Total number of octaves in the scale pyramid.
+</ParamField>
+
+<ParamField path="--SiftExtraction.octave_resolution" type="int" default="3">
+  Number of scale levels per octave.
+</ParamField>
+
+<ParamField path="--SiftExtraction.peak_threshold" type="float" default="0.0067">
+  Minimum contrast threshold for keypoint detection (computed as `0.02 / octave_resolution`). Lower values detect more keypoints.
+</ParamField>
+
+<ParamField path="--SiftExtraction.edge_threshold" type="float" default="10.0">
+  Maximum ratio of principal curvatures for edge filtering. Higher values retain more edge-like keypoints.
+</ParamField>
+
+<ParamField path="--SiftExtraction.max_num_orientations" type="int" default="2">
+  Maximum number of orientations computed per keypoint when `estimate_affine_shape` is disabled.
+</ParamField>
+
+<ParamField path="--SiftExtraction.upright" type="bool" default="false">
+  Fix all keypoint orientations to 0 (upright features). Disables rotation invariance.
+</ParamField>
+
+<ParamField path="--SiftExtraction.estimate_affine_shape" type="bool" default="false">
+  Estimate the affine shape of each feature (oriented ellipse) instead of the standard oriented disk. Produces more accurate descriptors at the cost of speed.
+</ParamField>
+
+<ParamField path="--SiftExtraction.domain_size_pooling" type="bool" default="false">
+  Compute an average descriptor across multiple scales around the detected scale (Domain-Size Pooling). Can improve matching accuracy.
+</ParamField>
+
+<ParamField path="--SiftExtraction.darkness_adaptivity" type="bool" default="false">
+  Adapt feature detection to image brightness. Available only in the OpenGL SiftGPU variant.
+</ParamField>
+
+## GPU vs CPU extraction
+
+When built with `CUDA_ENABLED`, the extractor uses the CUDA-based SiftGPU library for feature detection. When CUDA is not available, the pipeline falls back to the OpenGL-based SiftGPU implementation (which requires a Qt `QApplication` and an active OpenGL context) or a pure CPU implementation.
+
+The build configuration determines the default:
+
+```cpp
+#ifdef CUDA_ENABLED
+const bool kUseOpenGL = false;
+#else
+const bool kUseOpenGL = true;
+#endif
+```
+
+Set `--SiftExtraction.use_gpu false` to force CPU extraction regardless of what is available.
+
+<Warning>
+  Extraction on CPU is significantly slower for large image sets. Use GPU extraction whenever possible.
+</Warning>
+
+## Example
+
+```bash
+ppsfm feature_extractor \
+  --database_path ./project/database.db \
+  --image_path ./project/images \
+  --ImageReader.camera_model SIMPLE_RADIAL \
+  --SiftExtraction.max_num_features 8192 \
+  --SiftExtraction.use_gpu true
+```

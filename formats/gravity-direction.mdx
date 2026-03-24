@@ -1,0 +1,76 @@
+---
+title: "Gravity Direction Format"
+description: "How to provide per-image gravity direction vectors for the PP-SfM pipeline."
+---
+
+The gravity direction file tells the pipeline which way is "down" in each image's camera coordinate system. You provide one file per image alongside the image itself.
+
+## File naming
+
+Place the gravity file next to its image and append `.gravity.txt`:
+
+```
+<image_name>.jpg
+<image_name>.jpg.gravity.txt
+```
+
+For example:
+
+```
+IMG_0042.jpg
+IMG_0042.jpg.gravity.txt
+```
+
+## File format
+
+The file contains a single line with three space-separated floating-point values representing the gravity vector in camera coordinates:
+
+```txt
+gx gy gz
+```
+
+The vector must point **downwards** in the camera coordinate system and should be unit-length (normalized). For example:
+
+```txt
+0.022717 0.999539 -0.020155
+```
+
+<Warning>
+PP-SfM uses the **computer vision coordinate convention**:
+
+- **x** — points to the right
+- **y** — points downward
+- **z** — points forward (into the image plane, away from the viewer)
+
+This differs from the robotics convention where z points up. Make sure your gravity vectors are expressed in this frame before writing the file, or your reconstruction will be incorrectly oriented.
+</Warning>
+
+## Coordinate system explained
+
+In the camera frame, a perfectly level, forward-facing camera would have gravity pointing straight down, giving a gravity vector of `(0, 1, 0)`. Any tilt of the camera from level shifts the components into x and z. The example above, `0.022717 0.999539 -0.020155`, represents a camera that is nearly level with a small tilt.
+
+## Two gravity file formats
+
+The pipeline uses gravity files in two different contexts, with slightly different formats.
+
+<Note>
+**Per-image files (GUI pipeline):** When you run reconstruction through the graphical interface or the standard `mapper` command, each image reads its gravity from the sidecar `.gravity.txt` file containing only the three-component vector:
+
+```txt
+gx gy gz
+```
+
+**Batch gravity file (LineInitializer):** The `line_initializer` command reads a single combined gravity file that lists all images. Each line has four fields: image ID, image name, then the three gravity components:
+
+```txt
+# image_id image_name gx gy gz
+1 IMG_0042.jpg 0.022717 0.999539 -0.020155
+2 IMG_0043.jpg 0.018340 0.999412 -0.028771
+```
+
+Lines starting with `#` are treated as comments and ignored. The image name in this file must match the name stored in the database exactly.
+</Note>
+
+## How gravity direction is used
+
+The gravity vector constrains line feature alignment. Lines whose image direction is consistent with the gravity vector are classified as **gravity-aligned** (vertical lines in the world). This alignment information is what allows the privacy-preserving reconstruction to work without exposing image content — the pipeline reasons about line geometry rather than keypoint positions.

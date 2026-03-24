@@ -1,0 +1,164 @@
+---
+title: "Build Configuration"
+description: "CMake options, required dependencies, and common build configurations for PP-SfM."
+---
+
+PP-SfM uses CMake. You configure the build by passing `-D<OPTION>=<VALUE>` flags to `cmake`. All options have sensible defaults, so a minimal build only requires specifying the build type.
+
+```bash
+mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo
+make -j$(nproc)
+```
+
+<Note>
+Install targets have been deliberately removed from the build system. PP-SfM is experimental research code and is intended to be run directly from the build directory.
+</Note>
+
+## CMake options
+
+| Option | Default | Description |
+|---|---|---|
+| `SIMD_ENABLED` | `ON` | Enable SIMD vectorization |
+| `OPENMP_ENABLED` | `ON` | Enable OpenMP parallelization |
+| `IPO_ENABLED` | `ON` | Enable interprocedural optimization |
+| `CUDA_ENABLED` | `ON` | Enable CUDA GPU acceleration |
+| `OPENGL_ENABLED` | `ON` | Enable OpenGL (required for the GUI) |
+| `PROFILING_ENABLED` | `OFF` | Enable Google perftools profiling |
+| `BOOST_STATIC` | `ON` | Link Boost libraries statically |
+| `CUDA_ARCHS` | `"Auto"` | CUDA architecture targets |
+
+<ParamField path="SIMD_ENABLED" type="boolean" default="ON">
+  Enables SIMD (Single Instruction, Multiple Data) vectorization optimizations. Disable this if you are building for a target CPU that does not support the SIMD extensions detected at configure time.
+
+  ```bash
+  cmake .. -DSIMD_ENABLED=OFF
+  ```
+</ParamField>
+
+<ParamField path="OPENMP_ENABLED" type="boolean" default="ON">
+  Enables OpenMP-based parallelization for multi-core CPU operations such as feature extraction and matching. When enabled, the build system adds `-DOPENMP_ENABLED` and the appropriate OpenMP compiler flags automatically.
+
+  ```bash
+  cmake .. -DOPENMP_ENABLED=OFF
+  ```
+</ParamField>
+
+<ParamField path="IPO_ENABLED" type="boolean" default="ON">
+  Enables interprocedural (link-time) optimization. This option is automatically disabled in debug builds and when compiling with GCC, because of known compatibility issues. You rarely need to change this manually.
+
+  ```bash
+  cmake .. -DIPO_ENABLED=OFF
+  ```
+</ParamField>
+
+<ParamField path="CUDA_ENABLED" type="boolean" default="ON">
+  Enables CUDA GPU acceleration for SIFT feature extraction and matching. Requires CUDA Toolkit 7.0 or later. If the required version is not found, CUDA support is disabled automatically and a status message is printed. When CUDA is active, OpenGL is not used for GPU contexts.
+
+  ```bash
+  cmake .. -DCUDA_ENABLED=OFF
+  ```
+</ParamField>
+
+<ParamField path="OPENGL_ENABLED" type="boolean" default="ON">
+  Enables OpenGL support, which is required for the graphical user interface and for GPU-based feature extraction when CUDA is not available. Disabling this is only appropriate for headless server builds that will not use the GUI.
+
+  ```bash
+  cmake .. -DOPENGL_ENABLED=OFF
+  ```
+</ParamField>
+
+<ParamField path="PROFILING_ENABLED" type="boolean" default="OFF">
+  Links against `libprofiler` and `libtcmalloc` from the Google perftools suite. Enable this only when profiling performance, as it adds overhead to every build.
+
+  ```bash
+  cmake .. -DPROFILING_ENABLED=ON
+  ```
+</ParamField>
+
+<ParamField path="BOOST_STATIC" type="boolean" default="ON">
+  Links the Boost libraries statically into the binaries. Set to `OFF` to use shared Boost libraries instead. When `OFF`, the build also adds `-DBOOST_TEST_DYN_LINK` for the unit test framework.
+
+  ```bash
+  cmake .. -DBOOST_STATIC=OFF
+  ```
+</ParamField>
+
+<ParamField path="CUDA_ARCHS" type="string" default="Auto">
+  Controls which CUDA compute architectures the compiler generates PTX/SASS code for. `Auto` detects the GPU(s) present on the build machine. Other accepted values include:
+
+  - `All` — all known architectures (produces large binaries)
+  - `Maxwell` — NVIDIA Maxwell GPUs (GTX 900 series)
+  - `Pascal` — NVIDIA Pascal GPUs (GTX 1000 series)
+  - A comma-separated list of compute capability numbers, e.g. `"7.5,8.6"`
+
+  ```bash
+  cmake .. -DCUDA_ARCHS="Pascal"
+  ```
+</ParamField>
+
+## Required dependencies
+
+All dependencies below are required unless marked optional.
+
+| Dependency | Minimum version | CMake component(s) |
+|---|---|---|
+| Ceres Solver | — | `Ceres` |
+| Boost | — | `program_options`, `filesystem`, `graph`, `regex`, `system`, `unit_test_framework` |
+| Eigen3 | — | `Eigen3` |
+| FreeImage | — | `FreeImage` |
+| Glog | — | `Glog` |
+| OpenGL | — | `OpenGL`, `Glew` |
+| Qt5 | 5.4 | `Core`, `OpenGL`, `Widgets` |
+| CUDA | 7.0 | `CUDA` *(optional)* |
+
+Make sure your system's CMake module path can find these packages, or pass their installation prefixes via `-DCMAKE_PREFIX_PATH`.
+
+## Common configurations
+
+<Tip>
+**Headless server (no CUDA, no GUI)**
+
+Use this configuration when building on a cluster node that has no GPU and no display server:
+
+```bash
+cmake .. \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCUDA_ENABLED=OFF \
+  -DOPENGL_ENABLED=OFF
+```
+</Tip>
+
+<Tip>
+**Debug build**
+
+Debug builds automatically disable interprocedural optimization and initialize Eigen matrices to NaN to catch uninitialized-value bugs:
+
+```bash
+cmake .. -DCMAKE_BUILD_TYPE=Debug
+```
+
+Expect significantly longer compile times and larger binaries.
+</Tip>
+
+<Tip>
+**Explicit CUDA architecture**
+
+Specifying the architecture explicitly avoids the device-query step at configure time and produces smaller, faster-loading binaries:
+
+```bash
+cmake .. \
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DCUDA_ARCHS="Pascal"
+```
+</Tip>
+
+<Tip>
+**Shared Boost libraries**
+
+If your distribution does not ship static Boost libraries, disable static linking:
+
+```bash
+cmake .. -DBOOST_STATIC=OFF
+```
+</Tip>

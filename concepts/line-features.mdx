@@ -1,0 +1,156 @@
+---
+title: "Line Features"
+description: "The FeatureLine struct and related types that replace keypoint positions in the privacy-preserving pipeline."
+---
+
+## Overview
+
+In PP-SfM, keypoint coordinates are never sent to the reconstruction server. Instead, each keypoint is converted to a **line feature** — a 2D line in homogeneous form that passes through the keypoint position without revealing it. This page describes the C++ types that represent these features.
+
+All types described here live in `src/feature/types.h` inside the `colmap` namespace.
+
+## The `FeatureLine` struct
+
+`FeatureLine` is the primary feature type in PP-SfM. It stores a 2D line in homogeneous coordinates, an alignment flag, and an optional association to a 3D point.
+
+```cpp
+struct FeatureLine {
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+    FeatureLine() = default;
+    explicit FeatureLine(Eigen::Vector3d feature_line)
+        : line_(std::move(feature_line)), is_aligned_(false),
+          point3D_id_(kInvalidPoint3DId) {};
+    FeatureLine(Eigen::Vector3d feature_line, bool is_aligned)
+        : line_(std::move(feature_line)), is_aligned_(is_aligned),
+          point3D_id_(kInvalidPoint3DId) {};
+    FeatureLine(Eigen::Vector3d feature_line, bool is_aligned, point3D_t point3D_id)
+        : line_(std::move(feature_line)), is_aligned_(is_aligned),
+          point3D_id_(point3D_id) {};
+
+    bool IsAligned() const { return is_aligned_; }
+    void SetAligned(const bool is_aligned) { is_aligned_ = is_aligned; }
+
+    const Eigen::Vector3d& Line() const { return line_; }
+    void SetLine(const Eigen::Vector3d& line) { line_ = line; }
+
+    point3D_t Point3DId() const { return point3D_id_; }
+    bool HasPoint3D() const { return point3D_id_ != kInvalidPoint3DId; }
+    void SetPoint3DId(const point3D_t point3D_id) { point3D_id_ = point3D_id; }
+
+ private:
+    Eigen::Vector3d line_{Eigen::Vector3d::Zero()};
+    bool is_aligned_{false};
+    point3D_t point3D_id_{kInvalidPoint3DId};
+};
+```
+
+### Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `line_` | `Eigen::Vector3d` | The line in homogeneous 2D form `(a, b, c)^T` |
+| `is_aligned_` | `bool` | `true` if this line is parallel to the gravity direction |
+| `point3D_id_` | `point3D_t` | ID of the associated 3D point, or `kInvalidPoint3DId` if not yet triangulated |
+
+## Homogeneous line representation
+
+A line in 2D homogeneous form is a 3-vector `l = (a, b, c)^T`. A point `(x, y)` lies on the line if and only if:
+
+```
+a·x + b·y + c = 0
+```
+
+<Tip>
+  You can think of `(a, b)` as the line's normal vector and `c` as the signed offset from the origin. The direction along the line is perpendicular to `(a, b)`. Normalizing so that `a² + b² = 1` gives the signed perpendicular distance from the origin as `|c|`.
+</Tip>
+
+This form is convenient for projective geometry: the intersection of two lines `l1` and `l2` is the point `l1 × l2` (cross product), and the line through two points `p1` and `p2` is `p1 × p2`.
+
+## `IsAligned()` — the gravity-alignment flag
+
+`IsAligned()` returns `true` when the line is parallel to the **gravity direction** projected into the image plane.
+
+<Tip>
+  Gravity-aligned lines are lines whose normal vector `(a, b)` is perpendicular to the projected gravity direction. Equivalently, the line itself points in the same direction as gravity appears in the image. For a camera held level, this means the line runs vertically in the image.
+</Tip>
+
+Aligned lines play a special role in initialization. The `FourView2dEstimator` in `src/init/sfm2d.h` uses aligned tracks to solve a 2D SfM problem in the plane perpendicular to gravity. This step requires that some tracks are aligned — reconstruction will not initialize if all lines are unaligned.
+
+You can set the flag explicitly:
+
+```cpp
+FeatureLine fl(line_vec, /*is_aligned=*/true);
+// or after construction:
+fl.SetAligned(true);
+```
+
+## `FeatureLines` — the container type
+
+```cpp
+typedef std::vector<FeatureLine> FeatureLines;
+```
+
+`FeatureLines` is a `std::vector` of `FeatureLine` objects. It is the per-image feature container used throughout the pipeline, analogous to `FeatureKeypoints` in standard COLMAP.
+
+<Note>
+  `FeatureLine` uses `EIGEN_MAKE_ALIGNED_OPERATOR_NEW` and the vector is specialized with `EIGEN_DEFINE_STL_VECTOR_SPECIALIZATION_CUSTOM` to satisfy Eigen's alignment requirements for `Eigen::Vector3d`. Always use `FeatureLines` (not a raw `std::vector<FeatureLine>`) to avoid alignment issues.
+</Note>
+
+## `LineCoord` — endpoint representation
+
+```cpp
+typedef std::pair<Eigen::Vector2d, Eigen::Vector2d> LineCoord;
+typedef std::vector<LineCoord, Eigen::aligned_allocator<LineCoord>> LineCoords;
+```
+
+`LineCoord` stores a line as a pair of 2D endpoints rather than in homogeneous form. This representation is used when a line needs to be displayed or when endpoints are more convenient than the algebraic form.
+
+<Tip>
+  Given two endpoints `p1` and `p2` (as homogeneous 2D points), you can compute the homogeneous line as `l = p1.homogeneous().cross(p2.homogeneous())`. Going the other way requires choosing two points on the line, which introduces an arbitrary degree of freedom.
+</Tip>
+
+`LineCoords` uses `Eigen::aligned_allocator` to satisfy the 16-byte alignment requirement of `Eigen::Vector2d` on some platforms.
+
+## `FeatureKeypoint` — the original keypoint type
+
+`FeatureKeypoint` is the standard keypoint structure inherited from COLMAP. It is still used internally — for example, during feature extraction before conversion to lines.
+
+```cpp
+struct FeatureKeypoint {
+  FeatureKeypoint();
+  FeatureKeypoint(const float x, const float y);
+  FeatureKeypoint(const float x, const float y, const float scale,
+                  const float orientation);
+  FeatureKeypoint(const float x, const float y, const float a11,
+                  const float a12, const float a21, const float a22);
+
+  // Location in image coordinates. Origin at upper-left corner;
+  // upper-left pixel center is (0.5, 0.5).
+  float x;
+  float y;
+
+  // Affine shape of the feature.
+  float a11;
+  float a12;
+  float a21;
+  float a22;
+};
+```
+
+The coordinates `(x, y)` use the upper-left-corner origin convention: the upper-left pixel center is at `(0.5, 0.5)`.
+
+<Note>
+  `FeatureKeypoint` positions are **never transmitted** to the server in the privacy-preserving pipeline. They are converted to `FeatureLine` values on the client, and only the lines are stored in the database and used for matching and reconstruction.
+</Note>
+
+## Type summary
+
+| Type | Definition | Used for |
+|---|---|---|
+| `FeatureLine` | struct with `Eigen::Vector3d line_`, `bool is_aligned_`, `point3D_t point3D_id_` | Single privacy-preserving line feature |
+| `FeatureLines` | `std::vector<FeatureLine>` | Per-image collection of line features |
+| `LineCoord` | `std::pair<Eigen::Vector2d, Eigen::Vector2d>` | Line as two endpoints |
+| `LineCoords` | `std::vector<LineCoord, Eigen::aligned_allocator<LineCoord>>` | Collection of endpoint-form lines |
+| `FeatureKeypoint` | struct with `float x, y, a11, a12, a21, a22` | Original keypoint (client-only) |
+| `FeatureKeypoints` | `std::vector<FeatureKeypoint>` | Per-image collection of keypoints |

@@ -1,0 +1,161 @@
+---
+title: "feature_extractor"
+description: "Extract SIFT line features from images and write them to a database"
+---
+
+The `feature_extractor` command reads images from a directory, extracts SIFT features, converts them to line features, and stores the results in a COLMAP-compatible SQLite database. This is always the first step in the PP-SfM pipeline.
+
+Feature extraction runs on the GPU by default. If CUDA is unavailable, the extractor falls back to a CPU implementation automatically.
+
+## Usage
+
+```bash
+ppsfm feature_extractor \
+  --database_path DATABASE \
+  --image_path IMAGES \
+  [options]
+```
+
+## Required options
+
+<ParamField path="database_path" type="string" required>
+  Path to the SQLite database file. The file is created if it does not exist; the parent directory must already exist.
+</ParamField>
+
+<ParamField path="image_path" type="string" required>
+  Path to the root folder containing the input images. The extractor recurses into sub-directories.
+</ParamField>
+
+## General options
+
+<ParamField path="image_list_path" type="string">
+  Path to a plain-text file listing the images to process, one relative path per line. When provided, only the listed images are extracted; all other images in `image_path` are skipped.
+</ParamField>
+
+## Image reader options
+
+All options below are prefixed `ImageReader.` on the command line.
+
+<ParamField path="ImageReader.mask_path" type="string">
+  Root path to a folder containing per-image mask files. For each image at `image_path/sub/img.jpg`, the corresponding mask must be at `mask_path/sub/img.jpg.png`. Pixels that are black (intensity 0) in the mask are excluded from feature extraction.
+</ParamField>
+
+<ParamField path="ImageReader.camera_model" type="string" default="SIMPLE_RADIAL">
+  Camera model to use when intrinsics cannot be read from EXIF. Supported values include `SIMPLE_PINHOLE`, `PINHOLE`, `SIMPLE_RADIAL`, `RADIAL`, `OPENCV`, `OPENCV_FISHEYE`, `FULL_OPENCV`, and others. Must match a model name known to COLMAP.
+</ParamField>
+
+<ParamField path="ImageReader.existing_camera_id" type="number">
+  Re-use an already-registered camera from the database instead of creating a new one. When set, `ImageReader.camera_model` and `ImageReader.camera_params` are ignored.
+</ParamField>
+
+<ParamField path="ImageReader.camera_params" type="string">
+  Comma-separated camera intrinsic parameters corresponding to the selected camera model (e.g. `fx,fy,cx,cy` for `PINHOLE`). When empty, parameters are estimated from EXIF focal length data.
+</ParamField>
+
+<ParamField path="ImageReader.default_focal_length_factor" type="number" default="1.2">
+  When no EXIF focal length is available, the focal length is initialised to `default_focal_length_factor × max(width, height)`.
+</ParamField>
+
+<ParamField path="ImageReader.camera_mask_path" type="string">
+  Path to a single image file used as a mask applied to every image. Features are not extracted in regions where this mask is black.
+</ParamField>
+
+## SIFT extraction options
+
+All options below are prefixed `SiftExtraction.` on the command line.
+
+<ParamField path="SiftExtraction.num_threads" type="number" default="-1">
+  Number of CPU threads for extraction. `-1` uses all available cores.
+</ParamField>
+
+<ParamField path="SiftExtraction.use_gpu" type="boolean" default="true">
+  Whether to use the GPU for feature extraction.
+</ParamField>
+
+<ParamField path="SiftExtraction.gpu_index" type="string" default="-1">
+  Index of the GPU to use. Separate multiple indices with commas (e.g. `0,1,2`). `-1` selects all available GPUs.
+</ParamField>
+
+<ParamField path="SiftExtraction.max_image_size" type="number" default="3200">
+  Maximum image dimension in pixels. Images larger than this value are downscaled before extraction.
+</ParamField>
+
+<ParamField path="SiftExtraction.max_num_features" type="number" default="8192">
+  Maximum number of features to detect per image. When more features are found, only the largest-scale ones are kept.
+</ParamField>
+
+<ParamField path="SiftExtraction.first_octave" type="number" default="-1">
+  Index of the first octave in the scale-space pyramid. `-1` upsamples the image by one level before computing the pyramid.
+</ParamField>
+
+<ParamField path="SiftExtraction.num_octaves" type="number" default="4">
+  Number of octaves in the scale-space pyramid.
+</ParamField>
+
+<ParamField path="SiftExtraction.octave_resolution" type="number" default="3">
+  Number of scale levels per octave.
+</ParamField>
+
+<ParamField path="SiftExtraction.peak_threshold" type="number" default="0.0067">
+  Minimum contrast threshold for a scale-space extremum to be accepted as a keypoint. Lower values detect more, potentially noisier, features.
+</ParamField>
+
+<ParamField path="SiftExtraction.edge_threshold" type="number" default="10.0">
+  Maximum ratio of principal curvatures for a keypoint to pass the edge filter. Higher values retain more edge-like keypoints.
+</ParamField>
+
+<ParamField path="SiftExtraction.estimate_affine_shape" type="boolean" default="false">
+  When `true`, keypoints are detected as oriented ellipses (affine-covariant) rather than oriented disks. Improves matching accuracy at the cost of higher computational load.
+</ParamField>
+
+<ParamField path="SiftExtraction.max_num_orientations" type="number" default="2">
+  Maximum number of dominant orientations assigned to each keypoint when `estimate_affine_shape` is `false`.
+</ParamField>
+
+<ParamField path="SiftExtraction.upright" type="boolean" default="false">
+  When `true`, all keypoints are assigned a fixed orientation of 0 (upright). Useful for scenes with a known gravity direction.
+</ParamField>
+
+<ParamField path="SiftExtraction.domain_size_pooling" type="boolean" default="false">
+  Compute descriptors by averaging SIFT responses across multiple scales around the detected scale (domain-size pooling). Generally improves descriptor quality.
+</ParamField>
+
+<ParamField path="SiftExtraction.dsp_min_scale" type="number" default="0.1667">
+  Minimum relative scale factor used in domain-size pooling.
+</ParamField>
+
+<ParamField path="SiftExtraction.dsp_max_scale" type="number" default="3.0">
+  Maximum relative scale factor used in domain-size pooling.
+</ParamField>
+
+<ParamField path="SiftExtraction.dsp_num_scales" type="number" default="10">
+  Number of scale levels sampled between `dsp_min_scale` and `dsp_max_scale`.
+</ParamField>
+
+## Camera validation
+
+Before extraction begins, the command validates the camera model name and parameter count via `VerifyCameraParams`. If `ImageReader.camera_model` does not match a known model, or `ImageReader.camera_params` contains the wrong number of values for that model, the command exits with an error.
+
+## Example
+
+Extract features from all images in `data/images` and store them in `data/database.db`:
+
+```bash
+ppsfm feature_extractor \
+  --database_path data/database.db \
+  --image_path data/images
+```
+
+Extract from a specific subset of images with GPU disabled:
+
+```bash
+ppsfm feature_extractor \
+  --database_path data/database.db \
+  --image_path data/images \
+  --image_list_path selected_images.txt \
+  --SiftExtraction.use_gpu 0
+```
+
+<Note>
+  Each image is skipped if it already has features in the database, so you can safely re-run extraction after adding new images.
+</Note>

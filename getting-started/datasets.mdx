@@ -1,0 +1,97 @@
+---
+title: "Example Datasets"
+description: "Download and run the PP-SfM example dataset from the project page."
+---
+
+<Info>
+  The example dataset accompanies the paper **Privacy Preserving
+  Structure-from-Motion**, presented at the European Conference on Computer
+  Vision (ECCV) 2020. It is the recommended starting point for verifying your
+  installation and understanding the expected input format.
+</Info>
+
+## What is included
+
+The dataset from the project page provides:
+
+- A set of images captured with a calibrated camera
+- A `.camera_model.txt` file for each image containing the OPENCV calibration parameters
+- A `.gravity.txt` file for each image containing the gravity direction vector
+- A reference reconstruction for comparing your results
+
+## How to download
+
+The dataset is hosted on the project page at the Computer Vision and Geometry Lab, ETH Zurich:
+
+**[http://www.cvg.ethz.ch/research/privacy-preserving-sfm](http://www.cvg.ethz.ch/research/privacy-preserving-sfm)**
+
+Download and extract the archive to a local directory, for example `~/ppsfm_dataset`.
+
+## Expected input format
+
+After extraction, your dataset directory should follow the three-file-per-image pattern:
+
+```txt
+ppsfm_dataset/
+├── images/
+│   ├── image_001.jpg
+│   ├── image_001.jpg.camera_model.txt
+│   ├── image_001.jpg.gravity.txt
+│   ├── image_002.jpg
+│   ├── image_002.jpg.camera_model.txt
+│   ├── image_002.jpg.gravity.txt
+│   └── ...
+```
+
+Each `.camera_model.txt` contains a single line, for example:
+
+```txt
+OPENCV 2575.939766, 2608.293891, 1599.263118, 1257.125449, 0.141865, -0.465301, 0.000000, 0.000000
+```
+
+Each `.gravity.txt` contains a single line with the downward gravity vector in camera coordinates:
+
+```txt
+0.022717 0.999539 -0.020155
+```
+
+## How to run the pipeline
+
+With the dataset extracted and the build complete, run the full pipeline through the GUI:
+
+<Steps>
+  <Step title="Launch the GUI">
+    From your build directory, start PP-SfM:
+
+    ```bash
+    src/exe/ppsfm gui
+    ```
+  </Step>
+
+  <Step title="Set the image folder">
+    In the GUI, open a new project and point the image path to your dataset's
+    `images/` directory (e.g., `~/ppsfm_dataset/images`).
+  </Step>
+
+  <Step title="Run feature extraction">
+    Run feature extraction from the GUI. The pipeline reads the gravity and
+    camera calibration files from the image folder automatically during this step.
+  </Step>
+
+  <Step title="Run feature matching">
+    Run exhaustive or sequential feature matching depending on your dataset size.
+    For the example dataset, exhaustive matching is appropriate.
+  </Step>
+
+  <Step title="Run reconstruction">
+    Start the incremental mapper to reconstruct the scene. When it finishes,
+    you can compare the recovered camera poses against the reference model
+    included in the dataset.
+  </Step>
+</Steps>
+
+<Warning>
+  The released code is not identical to the code used to generate the results
+  in the ECCV 2020 paper. Numerical results may differ slightly from those
+  reported in the paper.
+</Warning>

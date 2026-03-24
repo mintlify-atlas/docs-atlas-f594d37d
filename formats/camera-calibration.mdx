@@ -1,0 +1,254 @@
+---
+title: "Camera Calibration Format"
+description: "How to provide per-image camera intrinsic calibration for the PP-SfM pipeline."
+---
+
+The camera calibration file provides the intrinsic parameters for each image. You place one file per image alongside the image itself.
+
+## File naming
+
+Place the calibration file next to its image and append `.camera_model.txt`:
+
+```
+<image_name>.jpg
+<image_name>.jpg.camera_model.txt
+```
+
+For example:
+
+```
+IMG_0042.jpg
+IMG_0042.jpg.camera_model.txt
+```
+
+## File format
+
+The file contains a single line. It starts with the camera model name, followed by the model's parameters as comma-separated values:
+
+```txt
+MODEL_NAME param1, param2, param3, ...
+```
+
+For example, using the OPENCV model:
+
+```txt
+OPENCV 2575.939766, 2608.293891, 1599.263118, 1257.125449, 0.141865, -0.465301, 0.000000, 0.000000
+```
+
+## Supported camera models
+
+The following models are supported. Choose the one that matches how your camera was calibrated. The model name you write in the file must match the identifier exactly (case-sensitive).
+
+<AccordionGroup>
+  <Accordion title="SIMPLE_PINHOLE — 3 parameters">
+    No distortion. One shared focal length.
+
+    **Parameters:** `f, cx, cy`
+
+    | Parameter | Description |
+    |-----------|-------------|
+    | `f` | Focal length in pixels (same for x and y) |
+    | `cx` | Principal point x-coordinate in pixels |
+    | `cy` | Principal point y-coordinate in pixels |
+
+    ```txt
+    SIMPLE_PINHOLE 2400.0, 1600.0, 1200.0
+    ```
+  </Accordion>
+
+  <Accordion title="PINHOLE — 4 parameters">
+    No distortion. Separate focal lengths for x and y.
+
+    **Parameters:** `fx, fy, cx, cy`
+
+    | Parameter | Description |
+    |-----------|-------------|
+    | `fx` | Focal length along x-axis in pixels |
+    | `fy` | Focal length along y-axis in pixels |
+    | `cx` | Principal point x-coordinate in pixels |
+    | `cy` | Principal point y-coordinate in pixels |
+
+    ```txt
+    PINHOLE 2400.0, 2410.0, 1600.0, 1200.0
+    ```
+  </Accordion>
+
+  <Accordion title="SIMPLE_RADIAL — 4 parameters">
+    One focal length, one radial distortion coefficient. Similar to the VisualSfM camera model.
+
+    **Parameters:** `f, cx, cy, k`
+
+    | Parameter | Description |
+    |-----------|-------------|
+    | `f` | Focal length in pixels |
+    | `cx` | Principal point x-coordinate in pixels |
+    | `cy` | Principal point y-coordinate in pixels |
+    | `k` | Radial distortion coefficient |
+
+    ```txt
+    SIMPLE_RADIAL 2400.0, 1600.0, 1200.0, -0.05
+    ```
+  </Accordion>
+
+  <Accordion title="RADIAL — 5 parameters">
+    One focal length, two radial distortion coefficients. Equivalent to the Bundler camera model.
+
+    **Parameters:** `f, cx, cy, k1, k2`
+
+    | Parameter | Description |
+    |-----------|-------------|
+    | `f` | Focal length in pixels |
+    | `cx` | Principal point x-coordinate in pixels |
+    | `cy` | Principal point y-coordinate in pixels |
+    | `k1` | First radial distortion coefficient |
+    | `k2` | Second radial distortion coefficient |
+
+    ```txt
+    RADIAL 2400.0, 1600.0, 1200.0, -0.05, 0.002
+    ```
+  </Accordion>
+
+  <Accordion title="OPENCV — 8 parameters (recommended for most cameras)">
+    Separate focal lengths, radial and tangential distortion up to 2nd degree. Based on the OpenCV pinhole model. Suitable for standard (non-fisheye) lenses.
+
+    **Parameters:** `fx, fy, cx, cy, k1, k2, p1, p2`
+
+    | Parameter | Description |
+    |-----------|-------------|
+    | `fx` | Focal length along x-axis in pixels |
+    | `fy` | Focal length along y-axis in pixels |
+    | `cx` | Principal point x-coordinate in pixels |
+    | `cy` | Principal point y-coordinate in pixels |
+    | `k1` | First radial distortion coefficient |
+    | `k2` | Second radial distortion coefficient |
+    | `p1` | First tangential distortion coefficient |
+    | `p2` | Second tangential distortion coefficient |
+
+    ```txt
+    OPENCV 2575.939766, 2608.293891, 1599.263118, 1257.125449, 0.141865, -0.465301, 0.000000, 0.000000
+    ```
+  </Accordion>
+
+  <Accordion title="OPENCV_FISHEYE — 8 parameters">
+    Separate focal lengths, four radial distortion coefficients using the OpenCV fisheye model. Suitable for wide-angle and fisheye lenses.
+
+    **Parameters:** `fx, fy, cx, cy, k1, k2, k3, k4`
+
+    | Parameter | Description |
+    |-----------|-------------|
+    | `fx` | Focal length along x-axis in pixels |
+    | `fy` | Focal length along y-axis in pixels |
+    | `cx` | Principal point x-coordinate in pixels |
+    | `cy` | Principal point y-coordinate in pixels |
+    | `k1`–`k4` | Radial distortion coefficients |
+
+    ```txt
+    OPENCV_FISHEYE 1200.0, 1200.0, 960.0, 540.0, -0.01, 0.001, -0.0001, 0.00001
+    ```
+  </Accordion>
+
+  <Accordion title="FULL_OPENCV — 12 parameters">
+    Full OpenCV model with six radial and two tangential distortion coefficients.
+
+    **Parameters:** `fx, fy, cx, cy, k1, k2, p1, p2, k3, k4, k5, k6`
+
+    | Parameter | Description |
+    |-----------|-------------|
+    | `fx`, `fy` | Focal lengths in pixels |
+    | `cx`, `cy` | Principal point in pixels |
+    | `k1`, `k2`, `k3` | Numerator radial distortion coefficients |
+    | `k4`, `k5`, `k6` | Denominator radial distortion coefficients |
+    | `p1`, `p2` | Tangential distortion coefficients |
+
+    ```txt
+    FULL_OPENCV 2400.0, 2400.0, 1600.0, 1200.0, -0.05, 0.002, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+    ```
+  </Accordion>
+
+  <Accordion title="FOV — 5 parameters">
+    Field-of-view model with a single distortion parameter `omega`. Used by Project Tango for equidistant calibration.
+
+    **Parameters:** `fx, fy, cx, cy, omega`
+
+    | Parameter | Description |
+    |-----------|-------------|
+    | `fx`, `fy` | Focal lengths in pixels |
+    | `cx`, `cy` | Principal point in pixels |
+    | `omega` | FOV distortion parameter |
+
+    ```txt
+    FOV 800.0, 800.0, 640.0, 480.0, 0.9
+    ```
+  </Accordion>
+
+  <Accordion title="SIMPLE_RADIAL_FISHEYE — 4 parameters">
+    One focal length, one radial distortion coefficient, using the fisheye projection model. A simplified version of `OPENCV_FISHEYE`.
+
+    **Parameters:** `f, cx, cy, k`
+
+    | Parameter | Description |
+    |-----------|-------------|
+    | `f` | Focal length in pixels |
+    | `cx`, `cy` | Principal point in pixels |
+    | `k` | Radial distortion coefficient |
+
+    ```txt
+    SIMPLE_RADIAL_FISHEYE 1200.0, 960.0, 540.0, -0.01
+    ```
+  </Accordion>
+
+  <Accordion title="RADIAL_FISHEYE — 5 parameters">
+    One focal length, two radial distortion coefficients, using the fisheye projection model. A simplified version of `OPENCV_FISHEYE`.
+
+    **Parameters:** `f, cx, cy, k1, k2`
+
+    | Parameter | Description |
+    |-----------|-------------|
+    | `f` | Focal length in pixels |
+    | `cx`, `cy` | Principal point in pixels |
+    | `k1`, `k2` | Radial distortion coefficients |
+
+    ```txt
+    RADIAL_FISHEYE 1200.0, 960.0, 540.0, -0.01, 0.001
+    ```
+  </Accordion>
+
+  <Accordion title="THIN_PRISM_FISHEYE — 12 parameters">
+    Full model with radial, tangential, and thin-prism distortion. Based on the model described in Weng et al., TPAMI 1992.
+
+    **Parameters:** `fx, fy, cx, cy, k1, k2, p1, p2, k3, k4, sx1, sy1`
+
+    | Parameter | Description |
+    |-----------|-------------|
+    | `fx`, `fy` | Focal lengths in pixels |
+    | `cx`, `cy` | Principal point in pixels |
+    | `k1`, `k2`, `k3`, `k4` | Radial distortion coefficients |
+    | `p1`, `p2` | Tangential distortion coefficients |
+    | `sx1`, `sy1` | Thin-prism distortion coefficients |
+
+    ```txt
+    THIN_PRISM_FISHEYE 2400.0, 2400.0, 1600.0, 1200.0, -0.05, 0.002, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Choosing the right model
+
+<CardGroup cols={2}>
+  <Card title="Standard lenses" icon="camera">
+    Use **OPENCV** if you have a calibration from OpenCV's `calibrateCamera`. It handles most consumer camera lenses well and supports both radial and tangential distortion.
+  </Card>
+  <Card title="Fisheye / wide-angle lenses" icon="eye">
+    Use **OPENCV_FISHEYE** or **RADIAL_FISHEYE** for lenses with field-of-view greater than ~100 degrees. These models use the `atan` projection which is stable for large distortions.
+  </Card>
+  <Card title="No calibration available" icon="question">
+    Use **SIMPLE_RADIAL** as a starting point. Set `f` to the image width, `cx`/`cy` to the image center, and `k` to `0`. The pipeline will refine these during bundle adjustment.
+  </Card>
+  <Card title="Known focal length only" icon="ruler">
+    Use **SIMPLE_PINHOLE** with the focal length from EXIF data (convert from mm to pixels: `f_pixels = f_mm * image_width / sensor_width_mm`).
+  </Card>
+</CardGroup>
+
+## Parameter units
+
+All focal length and principal point parameters are in **pixels**. The upper-left corner of the image has coordinate `(0, 0)`, and the lower-right corner has coordinate `(width, height)`. The center of the upper-left pixel is at `(0.5, 0.5)`.

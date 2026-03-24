@@ -1,0 +1,170 @@
+---
+title: "Feature matching"
+description: "Match line features across image pairs using exhaustive or sequential strategies."
+---
+
+After feature extraction, you need to find corresponding line features across different images. PP-SfM uses the same SIFT descriptor vectors that were computed during extraction — the descriptors encode gradient statistics and are not tied to exact keypoint positions, so they remain fully usable for cross-image matching.
+
+Two matching strategies are available:
+
+- **Exhaustive matching** — matches every image against every other image. Suitable for unordered image collections.
+- **Sequential matching** — matches each image against its nearest neighbors in sorted filename order. Suitable for ordered video sequences or image captures with a known traversal path.
+
+<Tabs>
+  <Tab title="Exhaustive matcher">
+    `ExhaustiveFeatureMatcher` computes matches for all N×(N−1)/2 image pairs. To keep memory usage bounded, images are processed in blocks. Within each block, all pairs are matched in one batch.
+
+    ```bash
+    ppsfm exhaustive_matcher \
+      --database_path DATABASE \
+      [options]
+    ```
+
+    ### When to use
+
+    Use exhaustive matching when:
+    - Your dataset has no inherent ordering (e.g. photos taken from arbitrary viewpoints).
+    - The dataset is small enough that O(N²) matching is affordable.
+    - You need the most thorough coverage of image pair connections.
+
+    <Tip>
+      For large datasets (hundreds of images or more), exhaustive matching can be very slow. Consider sequential matching if the images have a natural ordering.
+    </Tip>
+
+    ### Options
+
+    #### Database
+
+    <ParamField path="--database_path" type="string" required>
+      Path to the SQLite database file containing the extracted feature lines.
+    </ParamField>
+
+    #### Exhaustive matching options (`--ExhaustiveMatching.*`)
+
+    <ParamField path="--ExhaustiveMatching.block_size" type="int" default="50">
+      Number of images loaded into memory simultaneously for one matching block. Reducing this value lowers peak memory usage at the cost of more I/O.
+    </ParamField>
+
+    #### SIFT matching options (`--SiftMatching.*`)
+
+    <ParamField path="--SiftMatching.use_gpu" type="bool" default="true">
+      Use the GPU for descriptor matching via SiftGPU. Falls back to CUDA or OpenGL depending on the build.
+    </ParamField>
+
+    <ParamField path="--SiftMatching.gpu_index" type="string" default="-1">
+      Index of the GPU to use. Separate multiple indices with commas. Set to `-1` to use all available GPUs.
+    </ParamField>
+
+    <ParamField path="--SiftMatching.num_threads" type="int" default="-1">
+      Number of CPU threads for matching and geometric verification. Set to `-1` to use all cores.
+    </ParamField>
+
+    <ParamField path="--SiftMatching.max_ratio" type="float" default="0.8">
+      Maximum ratio between the distance to the best match and the second-best match (Lowe's ratio test). Lower values are more selective.
+    </ParamField>
+
+    <ParamField path="--SiftMatching.max_distance" type="float" default="0.7">
+      Maximum absolute descriptor distance to the best match.
+    </ParamField>
+
+    <ParamField path="--SiftMatching.cross_check" type="bool" default="true">
+      Only keep a match if it is the best match in both directions (mutual nearest neighbor check).
+    </ParamField>
+
+    <ParamField path="--SiftMatching.max_num_matches" type="int" default="32768">
+      Maximum number of matches to retain per image pair.
+    </ParamField>
+
+    <ParamField path="--SiftMatching.min_num_matches" type="int" default="15">
+      Minimum number of inlier matches required for an image pair to be considered geometrically verified.
+    </ParamField>
+  </Tab>
+
+  <Tab title="Sequential matcher">
+    `SequentialFeatureMatcher` matches each image against a window of neighbors determined by sorted image name order. It supports both linear overlap (images ±`overlap` positions away) and quadratic overlap (images ±2^k positions away, for k = 1, 2, …).
+
+    ```bash
+    ppsfm sequential_matcher \
+      --database_path DATABASE \
+      [options]
+    ```
+
+    ### When to use
+
+    Use sequential matching when:
+    - Your images are from a video or a continuous capture sequence.
+    - Image filenames reflect temporal or spatial order.
+    - The dataset is large and exhaustive matching is too slow.
+
+    The matching pattern for image `i` with `overlap = o` and `quadratic_overlap = true` is:
+
+    ```
+    image_[i - o, i + o]        (linear neighbors)
+    image_[i - 2^1, i + 2^1]   (quadratic neighbors)
+    image_[i - 2^2, i + 2^2]
+    ...
+    ```
+
+    ### Options
+
+    #### Database
+
+    <ParamField path="--database_path" type="string" required>
+      Path to the SQLite database file containing the extracted feature lines.
+    </ParamField>
+
+    #### Sequential matching options (`--SequentialMatching.*`)
+
+    <ParamField path="--SequentialMatching.overlap" type="int" default="10">
+      Number of adjacent images (in each direction) to match against. Increase this value if there are large gaps between overlapping frames.
+    </ParamField>
+
+    <ParamField path="--SequentialMatching.quadratic_overlap" type="bool" default="true">
+      In addition to linear neighbors, also match against images at quadratic distances (2^1, 2^2, … positions away). Helps close loops in long sequences.
+    </ParamField>
+
+    #### SIFT matching options (`--SiftMatching.*`)
+
+    <ParamField path="--SiftMatching.use_gpu" type="bool" default="true">
+      Use the GPU for descriptor matching via SiftGPU.
+    </ParamField>
+
+    <ParamField path="--SiftMatching.gpu_index" type="string" default="-1">
+      Index of the GPU to use. Separate multiple indices with commas. Set to `-1` to use all available GPUs.
+    </ParamField>
+
+    <ParamField path="--SiftMatching.num_threads" type="int" default="-1">
+      Number of CPU threads for matching and geometric verification. Set to `-1` to use all cores.
+    </ParamField>
+
+    <ParamField path="--SiftMatching.max_ratio" type="float" default="0.8">
+      Maximum ratio between the distance to the best match and the second-best match (Lowe's ratio test).
+    </ParamField>
+
+    <ParamField path="--SiftMatching.max_distance" type="float" default="0.7">
+      Maximum absolute descriptor distance to the best match.
+    </ParamField>
+
+    <ParamField path="--SiftMatching.cross_check" type="bool" default="true">
+      Only keep a match if it is the best match in both directions.
+    </ParamField>
+
+    <ParamField path="--SiftMatching.max_num_matches" type="int" default="32768">
+      Maximum number of matches to retain per image pair.
+    </ParamField>
+
+    <ParamField path="--SiftMatching.min_num_matches" type="int" default="15">
+      Minimum number of inlier matches required for geometric verification.
+    </ParamField>
+  </Tab>
+</Tabs>
+
+## GPU-accelerated matching
+
+When a CUDA-capable GPU is present, PP-SfM uses the `SiftGPUFeatureMatcher` to compute descriptor distances on the GPU. This is significantly faster than CPU matching for large batches of image pairs. The GPU variant uploads descriptor matrices to GPU memory and reuses previously uploaded data when possible.
+
+When CUDA is not available, the pipeline uses the OpenGL-based SiftGPU variant (via a Qt `QApplication` with an active OpenGL context) or falls back to CPU-based FLANN matching.
+
+<Note>
+  Matched pairs are written to the database incrementally. If matching is interrupted, you can resume by re-running the same command — already-matched pairs are skipped.
+</Note>

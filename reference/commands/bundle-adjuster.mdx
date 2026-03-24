@@ -1,0 +1,94 @@
+---
+title: "bundle_adjuster"
+description: "Refine camera poses and 3D point positions for an existing reconstruction"
+---
+
+The `bundle_adjuster` command runs a global bundle adjustment pass on an existing reconstruction. It reads a model from disk, optimises the camera poses and 3D point positions using Ceres Solver, and writes the refined model back to disk.
+
+This command is useful when you want to apply a standalone bundle adjustment step — for example, after manually editing a reconstruction or as a post-processing pass after incremental mapping.
+
+## Usage
+
+```bash
+ppsfm bundle_adjuster \
+  --input_path MODEL \
+  --output_path OUTPUT \
+  [options]
+```
+
+## Required options
+
+<ParamField path="input_path" type="string" required>
+  Path to an existing reconstruction directory (must contain `cameras.bin` or `cameras.txt`, `images.bin` or `images.txt`, and `points3D.bin` or `points3D.txt`). The path must be a directory.
+</ParamField>
+
+<ParamField path="output_path" type="string" required>
+  Path to the directory where the refined reconstruction will be written. The directory must already exist.
+</ParamField>
+
+## Bundle adjustment options
+
+All options below are prefixed `BundleAdjustment.` on the command line.
+
+<ParamField path="BundleAdjustment.max_num_iterations" type="number" default="100">
+  Maximum number of Ceres solver iterations.
+</ParamField>
+
+<ParamField path="BundleAdjustment.max_linear_solver_iterations" type="number" default="200">
+  Maximum number of iterations for the linear solver at each outer step.
+</ParamField>
+
+<ParamField path="BundleAdjustment.function_tolerance" type="number" default="0.0">
+  Solver stops when the relative decrease in cost falls below this value. `0.0` disables this stopping criterion.
+</ParamField>
+
+<ParamField path="BundleAdjustment.gradient_tolerance" type="number" default="0.0">
+  Solver stops when the norm of the gradient falls below this value. `0.0` disables this stopping criterion.
+</ParamField>
+
+<ParamField path="BundleAdjustment.parameter_tolerance" type="number" default="0.0">
+  Solver stops when the norm of the parameter update falls below this value. `0.0` disables this stopping criterion.
+</ParamField>
+
+<ParamField path="BundleAdjustment.refine_focal_length" type="boolean" default="false">
+  Whether to optimise the focal length of each camera during adjustment.
+</ParamField>
+
+<ParamField path="BundleAdjustment.refine_principal_point" type="boolean" default="false">
+  Whether to optimise the principal point of each camera during adjustment.
+</ParamField>
+
+<ParamField path="BundleAdjustment.refine_extra_params" type="boolean" default="false">
+  Whether to optimise distortion parameters during adjustment.
+</ParamField>
+
+<ParamField path="BundleAdjustment.refine_extrinsics" type="boolean" default="true">
+  Whether to optimise camera extrinsics (rotation and translation) during adjustment.
+</ParamField>
+
+## Example
+
+Run bundle adjustment on a completed reconstruction:
+
+```bash
+ppsfm bundle_adjuster \
+  --input_path results/sparse/0 \
+  --output_path results/sparse/0_refined
+```
+
+Run bundle adjustment and also refine focal lengths:
+
+```bash
+ppsfm bundle_adjuster \
+  --input_path results/sparse/0 \
+  --output_path results/sparse/0_refined \
+  --BundleAdjustment.refine_focal_length 1
+```
+
+<Note>
+  Both `input_path` and `output_path` must be existing directories. The command exits with an error if either path is not a directory.
+</Note>
+
+<Tip>
+  The `mapper` command already performs iterative local and global bundle adjustment during reconstruction. Use `bundle_adjuster` only when you need an additional post-processing refinement pass.
+</Tip>

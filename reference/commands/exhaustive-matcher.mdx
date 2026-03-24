@@ -1,0 +1,89 @@
+---
+title: "exhaustive_matcher"
+description: "Match features between every pair of images in the database"
+---
+
+The `exhaustive_matcher` command attempts to match SIFT features between every possible pair of images stored in the database. This strategy is best suited for small-to-medium collections (up to a few hundred images) where the number of pairs is manageable.
+
+For larger datasets or ordered sequences, consider [`sequential_matcher`](/reference/commands/sequential-matcher) instead.
+
+## Usage
+
+```bash
+ppsfm exhaustive_matcher \
+  --database_path DATABASE \
+  [options]
+```
+
+## Required options
+
+<ParamField path="database_path" type="string" required>
+  Path to the SQLite database containing the extracted features. The database must exist and already contain features written by `feature_extractor`.
+</ParamField>
+
+## Exhaustive matching options
+
+<ParamField path="ExhaustiveMatching.block_size" type="number" default="50">
+  Number of images loaded into memory at the same time when processing the matching matrix in blocks. Reduce this value if memory is limited; increase it for better throughput when memory is plentiful.
+</ParamField>
+
+## SIFT matching options
+
+All options below are prefixed `SiftMatching.` on the command line.
+
+<ParamField path="SiftMatching.num_threads" type="number" default="-1">
+  Number of CPU threads for matching and geometric verification. `-1` uses all available cores.
+</ParamField>
+
+<ParamField path="SiftMatching.use_gpu" type="boolean" default="true">
+  Whether to use the GPU for SIFT descriptor matching.
+</ParamField>
+
+<ParamField path="SiftMatching.gpu_index" type="string" default="-1">
+  Index of the GPU to use. Separate multiple indices with commas. `-1` selects all available GPUs.
+</ParamField>
+
+<ParamField path="SiftMatching.max_ratio" type="number" default="0.8">
+  Lowe's ratio test threshold. A match is accepted only when the distance to the best match divided by the distance to the second-best match is below this value.
+</ParamField>
+
+<ParamField path="SiftMatching.max_distance" type="number" default="0.7">
+  Maximum descriptor distance for a match to be accepted.
+</ParamField>
+
+<ParamField path="SiftMatching.cross_check" type="boolean" default="true">
+  When `true`, a match is kept only when image A's best match in image B is also image B's best match in image A.
+</ParamField>
+
+<ParamField path="SiftMatching.max_num_matches" type="number" default="32768">
+  Maximum number of matches retained per image pair before geometric verification.
+</ParamField>
+
+<ParamField path="SiftMatching.min_num_matches" type="number" default="15">
+  Minimum number of inlier matches required after geometric verification for a pair to be considered valid.
+</ParamField>
+
+## Example
+
+Run exhaustive matching on a database with default settings:
+
+```bash
+ppsfm exhaustive_matcher \
+  --database_path data/database.db
+```
+
+Run with a smaller block size to reduce peak memory usage:
+
+```bash
+ppsfm exhaustive_matcher \
+  --database_path data/database.db \
+  --ExhaustiveMatching.block_size 25
+```
+
+<Note>
+  Image pairs that have already been matched are skipped, so you can safely re-run this command after adding new images or adjusting options for unmatched pairs.
+</Note>
+
+<Tip>
+  The exhaustive strategy has O(n²) complexity. For collections with more than a few hundred images, consider a vocabulary-tree or spatial matcher to reduce runtime.
+</Tip>

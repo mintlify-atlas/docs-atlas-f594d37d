@@ -1,0 +1,42 @@
+---
+title: "gui"
+description: "Launch the graphical user interface for interactive feature extraction, matching, and reconstruction"
+---
+
+The `gui` command opens the PP-SfM graphical user interface — a Qt-based desktop application that exposes the full pipeline in a visual environment. You can run feature extraction, configure and execute matching strategies, and launch incremental reconstruction without writing any shell commands.
+
+Use the GUI to explore and inspect reconstructions interactively, visualise 3D point clouds, and export results.
+
+## Usage
+
+```bash
+ppsfm gui [--import_path PATH]
+```
+
+## Options
+
+<ParamField path="import_path" type="string">
+  Path to an existing reconstruction directory to import and display on startup. When provided, the reconstruction is loaded into the 3D viewer immediately after the window opens. If omitted, the GUI starts with an empty workspace.
+</ParamField>
+
+## Example
+
+Open the GUI with no initial reconstruction:
+
+```bash
+ppsfm gui
+```
+
+Open the GUI and immediately load a reconstruction stored at `results/sparse/0`:
+
+```bash
+ppsfm gui --import_path results/sparse/0
+```
+
+<Tip>
+  You can also pass `--project_path project.ini` to load a full project configuration from a file, giving the GUI access to all previously configured options.
+</Tip>
+
+<Note>
+  When GPU-based SIFT is in use and CUDA is not available, the GUI initialises an OpenGL context for GPU feature extraction and matching. Ensure your system has a functioning OpenGL driver in that case.
+</Note>

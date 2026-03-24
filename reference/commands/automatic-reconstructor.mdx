@@ -1,0 +1,92 @@
+---
+title: "automatic_reconstructor"
+description: "Run the full PP-SfM pipeline — extraction, matching, and mapping — in a single command"
+---
+
+The `automatic_reconstructor` command runs the entire reconstruction pipeline end-to-end: feature extraction, feature matching, and incremental SfM. It is the fastest way to go from a folder of images to a sparse 3D model.
+
+All intermediate files and final results are stored in a single workspace directory.
+
+## Usage
+
+```bash
+ppsfm automatic_reconstructor \
+  --workspace_path WORKSPACE \
+  --image_path IMAGES \
+  [options]
+```
+
+## Required options
+
+<ParamField path="workspace_path" type="string" required>
+  Path to the workspace folder where all results — the database, project file, and sparse reconstruction — are stored. The directory must already exist.
+</ParamField>
+
+<ParamField path="image_path" type="string" required>
+  Path to the folder containing the input images.
+</ParamField>
+
+## General options
+
+<ParamField path="mask_path" type="string">
+  Path to a folder containing per-image mask files. For each image `image_path/sub/img.jpg`, the corresponding mask must be at `mask_path/sub/img.jpg.png`. Black pixels (intensity 0) suppress feature extraction.
+</ParamField>
+
+<ParamField path="data_type" type="string" default="individual">
+  Type of input data. Controls how matching and mapper settings are tuned.
+
+  - `individual` — unordered collection of photos. Uses exhaustive matching and individual-data mapper settings.
+  - `video` — ordered video sequence. Uses sequential matching and video-optimised mapper settings (e.g. higher BA frequency ratios, relaxed triangulation angle threshold).
+</ParamField>
+
+<ParamField path="quality" type="string" default="high">
+  Reconstruction quality preset. Adjusts feature extraction and bundle adjustment parameters.
+
+  | Value | Effect |
+  |-------|--------|
+  | `low` | Smaller max image size (1000 px), fewer BA iterations, faster but less accurate |
+  | `medium` | Max image size 1600 px, moderate BA iterations |
+  | `high` | Affine SIFT shape estimation enabled, max image size 2400 px, more BA iterations |
+  | `extreme` | Affine SIFT and domain-size pooling enabled, maximum BA iterations |
+</ParamField>
+
+<ParamField path="num_threads" type="number" default="-1">
+  Number of CPU threads to use across all pipeline stages. `-1` uses all available cores.
+</ParamField>
+
+<ParamField path="use_gpu" type="boolean" default="true">
+  Whether to use the GPU for feature extraction and matching.
+</ParamField>
+
+<ParamField path="gpu_index" type="string" default="-1">
+  Index of the GPU to use. Separate multiple indices with commas (e.g. `0,1,2`). `-1` selects all available GPUs.
+</ParamField>
+
+## Example
+
+Run a full reconstruction of an unordered photo collection at high quality:
+
+```bash
+ppsfm automatic_reconstructor \
+  --workspace_path workspace \
+  --image_path data/images
+```
+
+Run a fast reconstruction of a video sequence on CPU only:
+
+```bash
+ppsfm automatic_reconstructor \
+  --workspace_path workspace \
+  --image_path data/frames \
+  --data_type video \
+  --quality low \
+  --use_gpu 0
+```
+
+<Note>
+  The workspace directory will contain a `database.db` SQLite file, a `project.ini` configuration file, and a `sparse/` subdirectory with numbered sub-model folders.
+</Note>
+
+<Tip>
+  For large collections or finer control over each pipeline stage, run `feature_extractor`, then a matching command, then `mapper` individually. This lets you inspect intermediate results and adjust parameters between stages.
+</Tip>

@@ -1,0 +1,99 @@
+---
+title: "Introduction"
+description: "Privacy Preserving Structure-from-Motion — 3D reconstruction that protects image content from processing servers"
+---
+
+## What is Privacy Preserving SfM?
+
+Privacy Preserving Structure-from-Motion (PP-SfM) is a modified version of the [COLMAP](https://github.com/colmap/colmap) pipeline developed by the [Computer Vision and Geometry Group](http://www.cvg.ethz.ch) at ETH Zurich. It enables 3D scene reconstruction while protecting the privacy of image content.
+
+Instead of sending raw keypoint positions to a processing server — which could reveal sensitive visual content — PP-SfM replaces keypoints with **line features**. These lines encode the geometric information needed for reconstruction without exposing exact pixel locations of dynamic objects such as people, vehicles, or other identifiable content.
+
+The approach was presented at the **European Conference on Computer Vision (ECCV) 2020**.
+
+<CardGroup cols={2}>
+  <Card title="Get Started" icon="rocket" href="/getting-started/installation">
+    Install the pipeline and run your first reconstruction
+  </Card>
+  <Card title="Core Concepts" icon="lightbulb" href="/concepts/privacy-preserving-sfm">
+    Understand how line features enable privacy-preserving SfM
+  </Card>
+  <Card title="Pipeline Guide" icon="diagram-project" href="/pipeline/overview">
+    Walk through each stage of the reconstruction pipeline
+  </Card>
+  <Card title="Command Reference" icon="terminal" href="/reference/commands/gui">
+    Complete reference for all CLI commands
+  </Card>
+</CardGroup>
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="Line-based privacy" icon="shield-halved">
+    Replaces keypoint coordinates with line features to hide dynamic image content
+  </Card>
+  <Card title="Gravity-aligned lines" icon="arrow-down">
+    Uses gravity direction to constrain line orientations and improve reconstruction accuracy
+  </Card>
+  <Card title="Incremental SfM" icon="layer-group">
+    Incrementally registers images into a growing 3D model, following the proven COLMAP approach
+  </Card>
+  <Card title="4-view initialization" icon="images">
+    Uses 4-image sets of both aligned and unaligned line tracks for robust reconstruction initialization
+  </Card>
+  <Card title="CUDA acceleration" icon="microchip">
+    Optional GPU acceleration for SIFT feature extraction using CUDA
+  </Card>
+  <Card title="Multiple camera models" icon="camera">
+    Supports SIMPLE_PINHOLE, PINHOLE, OPENCV, OPENCV_FISHEYE, FULL_OPENCV, and more
+  </Card>
+  <Card title="GUI and CLI" icon="display">
+    Full Qt-based graphical interface plus command-line tools for every pipeline step
+  </Card>
+  <Card title="Bundle adjustment" icon="sliders">
+    Optimizes camera poses and 3D line positions using Ceres Solver
+  </Card>
+</CardGroup>
+
+## How it works
+
+The privacy-preserving approach transforms standard SIFT keypoints into **line features** before sharing data with a reconstruction server:
+
+1. **Feature extraction** — SIFT keypoints are extracted locally on device
+2. **Line conversion** — Each keypoint is converted to a line passing through the keypoint position (the exact position is hidden, but the line encodes direction constraints)
+3. **Gravity alignment** — Lines parallel to the gravity direction are flagged as "aligned" and provide stronger geometric constraints
+4. **Reconstruction** — The server reconstructs the 3D scene from matched lines, without ever seeing the original keypoint positions
+
+## Citation
+
+If you use this code in scientific work, please cite:
+
+```bibtex
+@inproceedings{Geppert2020ECCV,
+  author    = {Marcel Geppert and
+               Viktor Larsson and
+               Pablo Speciale and
+               Johannes L. Sch{\"{o}}nberger and
+               Marc Pollefeys},
+  title     = {Privacy Preserving Structure-from-Motion},
+  booktitle = {European Conference on Computer Vision (ECCV)},
+  year      = {2020},
+}
+
+@inproceedings{schoenberger2016sfm,
+  author={Sch\"{o}nberger, Johannes Lutz and Frahm, Jan-Michael},
+  title={Structure-from-Motion Revisited},
+  booktitle={Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year={2016},
+}
+```
+
+<Note>
+  This is not the exact same code used to produce results in the paper. It is a cleaned-up version intended for reproducibility and research use.
+</Note>
+
+## Research context
+
+The project page and example datasets are available at the [CVG ETH Zurich research page](http://www.cvg.ethz.ch/research/privacy-preserving-sfm).
+
+A follow-up version that works **without known camera calibrations** was presented at CVPR 2021. That code will be released in this repository when ready.

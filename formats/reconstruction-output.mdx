@@ -1,0 +1,165 @@
+---
+title: "Reconstruction Output"
+description: "Structure of the reconstruction files written by the PP-SfM pipeline, including cameras, images, and 3D line observations."
+---
+
+The pipeline writes reconstructions in the COLMAP text format. Each reconstruction lives in a numbered subdirectory and consists of three files plus a project configuration file.
+
+## Output directory structure
+
+When you run `ppsfm mapper`, each completed sub-model is written to a numbered subdirectory inside your `--output_path`:
+
+```
+output_path/
+  0/
+    cameras.txt
+    images.txt
+    points3D.txt
+    project.ini
+  1/
+    cameras.txt
+    images.txt
+    points3D.txt
+    project.ini
+  ...
+```
+
+If multiple disconnected components are found in the scene, each component becomes a separate sub-model with its own directory. Sub-model `0/` contains the largest component.
+
+<Note>
+You can post-process a reconstruction with `ppsfm image_filterer --input_path 0/ --output_path filtered/` to remove images with too few observations or bogus camera parameters. The filterer reads and writes the same three-file format.
+</Note>
+
+## cameras.txt
+
+Stores camera intrinsics. Each registered camera occupies one line.
+
+```txt
+# Camera list with one line of data per camera:
+#   CAMERA_ID, MODEL, WIDTH, HEIGHT, PARAMS[]
+# Number of cameras: 3
+1 OPENCV 3264 2448 2575.939766 2608.293891 1599.263118 1257.125449 0.141865 -0.465301 0.000000 0.000000
+2 SIMPLE_RADIAL 4032 3024 3500.000000 2016.000000 1512.000000 -0.042000
+3 PINHOLE 1920 1080 1850.000000 1850.000000 960.000000 540.000000
+```
+
+**Fields per line:**
+
+| Field | Description |
+|-------|-------------|
+| `CAMERA_ID` | Unique integer identifier for this camera |
+| `MODEL` | Camera model name (see [Camera Calibration](/formats/camera-calibration)) |
+| `WIDTH` | Image width in pixels |
+| `HEIGHT` | Image height in pixels |
+| `PARAMS[]` | Space-separated intrinsic parameters for the chosen model |
+
+Multiple images can share the same camera entry if they were taken with identical intrinsics.
+
+## images.txt
+
+Stores camera extrinsics (pose) and the 2D line observations for each registered image. Each image uses **two lines**.
+
+```txt
+# Image list with two lines of data per image:
+#   IMAGE_ID, QW, QX, QY, QZ, TX, TY, TZ, CAMERA_ID, NAME
+#   LINES2D[] as (A, B, C, is_aligned, POINT3D_ID)
+# Number of images: 2, mean observations per image: 142.5
+1 0.99823 0.01204 -0.05691 0.01827 -1.23400 0.56700 3.45600 1 IMG_0042.jpg
+0.57735 0.57735 0.57735 0 -1 -0.70711 0.70711 0.00000 1 24 ...
+2 0.99701 0.02341 -0.07123 0.00912 -0.98700 0.43200 2.87300 1 IMG_0043.jpg
+0.57735 0.57735 0.57735 1 156 -0.70711 0.70711 0.00000 0 -1 ...
+```
+
+**First line per image:**
+
+| Field | Description |
+|-------|-------------|
+| `IMAGE_ID` | Unique integer identifier for this image |
+| `QW QX QY QZ` | Rotation quaternion (world-to-camera), scalar-first |
+| `TX TY TZ` | Translation vector (world-to-camera) |
+| `CAMERA_ID` | Reference to the camera in `cameras.txt` |
+| `NAME` | Image filename as stored in the database |
+
+**Second line per image — LINES2D:**
+
+All line observations for this image are concatenated on a single line. Each observation is a group of five space-separated values:
+
+| Field | Description |
+|-------|-------------|
+| `A B C` | Homogeneous line coefficients in the image plane (normalized so that `sqrt(A²+B²) = 1`) |
+| `is_aligned` | `1` if this line is gravity-aligned (vertical in the world), `0` otherwise |
+| `POINT3D_ID` | ID of the triangulated 3D point, or `-1` if not yet triangulated |
+
+### Camera pose convention
+
+The pose stored in `images.txt` is the **world-to-camera** transform. To get the camera center in world coordinates:
+
+```
+camera_center = -R^T * t
+```
+
+where `R` is the rotation matrix constructed from `(QW, QX, QY, QZ)` and `t = (TX, TY, TZ)`.
+
+<Warning>
+The quaternion is stored in scalar-first order `(QW, QX, QY, QZ)`, not the XYZW order used by some libraries such as Eigen's default constructor. When loading with Eigen, pass the values as `Eigen::Quaterniond(qw, qx, qy, qz)`.
+</Warning>
+
+## points3D.txt
+
+Stores the triangulated 3D points and their observation tracks. Each point occupies one line.
+
+```txt
+# 3D point list with one line of data per point:
+#   POINT3D_ID, X, Y, Z, R, G, B, ERROR, TRACK[] as (IMAGE_ID, line_idx)
+# Number of points: 12483, mean track length: 3.72
+1 -1.23456 0.56789 2.34567 128 64 32 0.45 1 0 2 3 4 17
+2  0.98765 -0.43210 1.23456 200 180 160 0.31 1 5 3 8
+```
+
+**Fields per line:**
+
+| Field | Description |
+|-------|-------------|
+| `POINT3D_ID` | Unique integer identifier for this 3D point |
+| `X Y Z` | 3D coordinates in world space |
+| `R G B` | Color (0–255 per channel), derived from the source images |
+| `ERROR` | Mean reprojection error across the track in pixels |
+| `TRACK[]` | Pairs of `(IMAGE_ID, line_idx)` listing which image lines observe this point |
+
+<Note>
+Because PP-SfM uses **line features** rather than point features, `line_idx` indexes into the `LINES2D` array for that image — not a pixel coordinate. The connection between a 3D point and a 2D observation is through the line that the 3D point projects onto.
+</Note>
+
+## project.ini
+
+Each reconstruction directory also contains a `project.ini` file written by the mapper. It records the option values used during reconstruction so you can reproduce or continue the run:
+
+```ini
+[General]
+database_path=/path/to/database.db
+image_path=/path/to/images
+
+[Mapper]
+min_num_matches=15
+max_num_models=50
+...
+```
+
+You can pass this file back to the mapper with `--project_path project.ini` to resume reconstruction with the same settings.
+
+## Reading a reconstruction in code
+
+The `Reconstruction` class reads and writes the three-file format directly:
+
+```cpp
+#include "base/reconstruction.h"
+
+// Read — prefers cameras/images/points3D text files
+colmap::Reconstruction reconstruction;
+reconstruction.Read("/path/to/output/0");
+
+// Write text format explicitly
+reconstruction.WriteText("/path/to/output/0");
+```
+
+The `Read` method looks for `cameras.txt`, `images.txt`, and `points3D.txt` in the given directory and calls `ReadText` internally. If those files are absent, it will abort with a fatal error.

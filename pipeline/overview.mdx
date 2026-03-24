@@ -1,0 +1,87 @@
+---
+title: "Pipeline Overview"
+description: "A walkthrough of the five-stage PP-SfM pipeline, from feature extraction to bundle adjustment."
+---
+
+PP-SfM reconstructs a 3D scene from a collection of images without ever exposing raw keypoint positions. Instead of matching point coordinates, the pipeline matches **line features** — geometric proxies that encode directional information but hide the precise locations of image content.
+
+The pipeline consists of five sequential stages:
+
+<Steps>
+  <Step title="Feature extraction">
+    SIFT keypoints are extracted from each image using `SiftFeatureExtractor`. Each keypoint is then converted into a **line feature** that passes through the keypoint position. Lines parallel to the gravity direction are flagged as *gravity-aligned* and provide stronger geometric constraints during initialization.
+
+    Output: feature lines stored in the database for each image.
+  </Step>
+
+  <Step title="Feature matching">
+    Line features are matched across image pairs using SIFT descriptor similarity. PP-SfM offers two strategies: **exhaustive matching** (every image against every other image) and **sequential matching** (each image against its nearest neighbors in order). The result is a correspondence graph stored in the database.
+
+    Output: matched line pairs for every overlapping image pair.
+  </Step>
+
+  <Step title="Initialization">
+    The reconstruction starts from a carefully chosen set of **four images**. The initializer (`init::initialize_reconstruction`) searches for 4-view tracks that consist entirely of gravity-aligned lines and entirely of unaligned lines, then estimates initial camera poses from both track types jointly. Gravity direction vectors are required as input.
+
+    Output: camera poses for the four seed images.
+  </Step>
+
+  <Step title="Incremental reconstruction">
+    `IncrementalMapperController` grows the model one image at a time. For each new image, it estimates an absolute pose from visible 3D lines, triangulates new points, and runs local bundle adjustment over the most recently registered images. The process repeats until no more images can be registered.
+
+    Output: a sparse 3D reconstruction with registered camera poses.
+  </Step>
+
+  <Step title="Bundle adjustment">
+    After all images are registered, a final global bundle adjustment pass refines all camera poses and 3D point positions simultaneously using Ceres Solver. You can also run `ppsfm bundle_adjuster` as a standalone step on any existing reconstruction.
+
+    Output: a refined reconstruction written to the output directory.
+  </Step>
+</Steps>
+
+## Key difference from standard COLMAP
+
+In standard COLMAP, features are point keypoints with 2D pixel coordinates. Those coordinates, if leaked to an untrusted server, could reveal the positions of people, faces, license plates, and other sensitive content.
+
+PP-SfM replaces each keypoint with a **line** defined by an angle and a 1D offset. The exact 2D position of the keypoint is not recoverable from a single line — it takes the intersection of at least two lines from different images to triangulate any point, and even then the privacy guarantee holds under the threat model described in the ECCV 2020 paper.
+
+<Info>
+  Lines flagged as **gravity-aligned** are those whose orientation matches the gravity direction in the image. They carry stronger geometric constraints than random lines and are essential for the 4-view initialization step.
+</Info>
+
+## Data flow
+
+```
+Images on disk
+      │
+      ▼
+[feature_extractor] ──► database.db  (cameras, images, feature lines)
+      │
+      ▼
+[exhaustive_matcher │ sequential_matcher] ──► database.db  (line matches)
+      │
+      ▼
+[mapper │ line_initializer]  ──► output/0/  (cameras.bin, images.bin, points3D.bin)
+      │
+      ▼
+[bundle_adjuster]  ──► output/refined/  (optional standalone refinement)
+```
+
+All intermediate data — images, feature lines, and matches — lives in a single SQLite **database file**. The reconstruction output is written as binary or text files following the standard COLMAP reconstruction format.
+
+## Explore each stage
+
+<CardGroup cols={2}>
+  <Card title="Feature extraction" icon="magnifying-glass" href="/pipeline/feature-extraction">
+    Extract SIFT features and convert them to privacy-preserving line features.
+  </Card>
+  <Card title="Feature matching" icon="code-compare" href="/pipeline/feature-matching">
+    Match line features across image pairs using exhaustive or sequential strategies.
+  </Card>
+  <Card title="Incremental reconstruction" icon="layer-group" href="/pipeline/reconstruction">
+    Run the 4-view initializer and grow the reconstruction image by image.
+  </Card>
+  <Card title="Bundle adjustment" icon="sliders" href="/pipeline/bundle-adjustment">
+    Refine camera poses and 3D points with global bundle adjustment.
+  </Card>
+</CardGroup>

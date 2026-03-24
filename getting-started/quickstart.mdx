@@ -1,0 +1,100 @@
+---
+title: "Quickstart"
+description: "Go from installation to your first privacy-preserving reconstruction."
+---
+
+PP-SfM extends the standard COLMAP pipeline with two pieces of per-image metadata: a gravity direction and a camera calibration. Once those files are in place, you run the pipeline exactly like standard COLMAP — through the GUI with feature extraction, matching, and reconstruction.
+
+## Prepare your data
+
+<Steps>
+  <Step title="Arrange your image folder">
+    For each image, create two companion text files in the same directory:
+
+    ```txt
+    image.jpg
+    image.jpg.camera_model.txt
+    image.jpg.gravity.txt
+    ```
+
+    A complete folder with three images looks like this:
+
+    ```txt
+    images/
+    ├── frame_001.jpg
+    ├── frame_001.jpg.camera_model.txt
+    ├── frame_001.jpg.gravity.txt
+    ├── frame_002.jpg
+    ├── frame_002.jpg.camera_model.txt
+    ├── frame_002.jpg.gravity.txt
+    ├── frame_003.jpg
+    ├── frame_003.jpg.camera_model.txt
+    └── frame_003.jpg.gravity.txt
+    ```
+
+    <Tip>
+      Keep all images and their companion files flat in one directory. The
+      pipeline discovers files by matching the image filename exactly.
+    </Tip>
+  </Step>
+
+  <Step title="Write the gravity direction file">
+    Each `.gravity.txt` file contains a single line: the gravity vector pointing
+    **downwards in camera coordinates**, given as three space-separated values.
+
+    ```txt
+    0.022717 0.999539 -0.020155
+    ```
+
+    <Note>
+      PP-SfM uses the computer vision coordinate convention:
+      - **x** points right
+      - **y** points down
+      - **z** points forward (into the image plane)
+
+      This means a camera held level will have a gravity vector close to
+      `0 1 0`. Tilt the camera and the vector rotates accordingly.
+    </Note>
+  </Step>
+
+  <Step title="Write the camera calibration file">
+    Each `.camera_model.txt` file contains a single line with the camera model
+    name followed by its parameters as comma-separated values.
+
+    ```txt
+    OPENCV 2575.939766, 2608.293891, 1599.263118, 1257.125449, 0.141865, -0.465301, 0.000000, 0.000000
+    ```
+
+    The parameters for the `OPENCV` model are:
+    `fx, fy, cx, cy, k1, k2, p1, p2`
+
+    <Tip>
+      Check `src/base/camera_models.h` for the full list of supported camera
+      model identifiers and the exact parameter order each model expects.
+    </Tip>
+  </Step>
+
+  <Step title="Launch the GUI">
+    From inside your build directory, start the PP-SfM graphical interface:
+
+    ```bash
+    src/exe/ppsfm gui
+    ```
+  </Step>
+
+  <Step title="Run the reconstruction pipeline">
+    Inside the GUI, run the three standard COLMAP pipeline stages in order:
+
+    1. **Feature extraction** — extracts privacy-preserving line features from
+       each image, reading the gravity and calibration files automatically.
+    2. **Matching** — matches features across image pairs to find correspondences.
+    3. **Reconstruction** — runs incremental SfM to recover camera poses and
+       a sparse 3D model.
+
+    <Note>
+      The pipeline reads the `.gravity.txt` and `.camera_model.txt` files
+      automatically during feature extraction. You do not need to configure
+      them separately in the GUI.
+    </Note>
+  </Step>
+</Steps>

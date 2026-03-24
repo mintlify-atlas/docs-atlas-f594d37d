@@ -1,0 +1,349 @@
+---
+title: "Camera Models"
+description: "Reference for all supported camera projection and distortion models in PP-SfM, including parameter definitions and usage examples."
+---
+
+PP-SfM supports eleven camera models covering everything from simple pinhole optics to complex fisheye lenses. You select the model by name when running feature extraction, and the same name appears in `camera_model.txt` files used to supply known camera intrinsics.
+
+<Note>
+All models use the convention that the upper-left image corner is `(0, 0)` and the lower-right corner is `(width, height)`. The center of the upper-left pixel is therefore `(0.5, 0.5)` and the center of the lower-right pixel is `(width - 0.5, height - 0.5)`.
+</Note>
+
+## Model summary
+
+| Model name | Model ID | Parameters | Param count |
+|---|---|---|---|
+| `SIMPLE_PINHOLE` | 0 | `f, cx, cy` | 3 |
+| `PINHOLE` | 1 | `fx, fy, cx, cy` | 4 |
+| `SIMPLE_RADIAL` | 2 | `f, cx, cy, k` | 4 |
+| `RADIAL` | 3 | `f, cx, cy, k1, k2` | 5 |
+| `OPENCV` | 4 | `fx, fy, cx, cy, k1, k2, p1, p2` | 8 |
+| `OPENCV_FISHEYE` | 5 | `fx, fy, cx, cy, k1, k2, k3, k4` | 8 |
+| `FULL_OPENCV` | 6 | `fx, fy, cx, cy, k1, k2, p1, p2, k3, k4, k5, k6` | 12 |
+| `FOV` | 7 | `fx, fy, cx, cy, omega` | 5 |
+| `SIMPLE_RADIAL_FISHEYE` | 8 | `f, cx, cy, k` | 4 |
+| `RADIAL_FISHEYE` | 9 | `f, cx, cy, k1, k2` | 5 |
+| `THIN_PRISM_FISHEYE` | 10 | `fx, fy, cx, cy, k1, k2, p1, p2, k3, k4, sx1, sy1` | 12 |
+
+## Using a model name in `camera_model.txt`
+
+When you provide a known camera calibration, write one line per camera in the following format:
+
+```txt
+<model_name> <width> <height> <param1> <param2> ...
+```
+
+For example, a 1920×1080 camera calibrated with the OpenCV model:
+
+```txt
+OPENCV 1920 1080 1200.0 1200.0 960.0 540.0 -0.12 0.08 0.0001 -0.0002
+```
+
+The parameters must appear in exactly the order listed for each model below.
+
+## Model details
+
+<AccordionGroup>
+
+<Accordion title="SIMPLE_PINHOLE — ID 0 — 3 parameters">
+
+A distortion-free pinhole camera with a single shared focal length for both axes.
+
+**Parameters (in order):** `f, cx, cy`
+
+| Parameter | Description |
+|---|---|
+| `f` | Focal length in pixels (same for x and y) |
+| `cx` | Principal point x-coordinate in pixels |
+| `cy` | Principal point y-coordinate in pixels |
+
+**Projection:** `x = f·u + cx`, `y = f·v + cy`
+
+**Suitable for:** Cameras where you want the simplest possible model and distortion is negligible — for example, when prototyping or when images have already been undistorted.
+
+**Example `camera_model.txt` line:**
+
+```txt
+SIMPLE_PINHOLE 1920 1080 1200.0 960.0 540.0
+```
+
+</Accordion>
+
+<Accordion title="PINHOLE — ID 1 — 4 parameters">
+
+A distortion-free pinhole camera with independent focal lengths for the x and y axes. Use this instead of `SIMPLE_PINHOLE` when the sensor has non-square pixels.
+
+**Parameters (in order):** `fx, fy, cx, cy`
+
+| Parameter | Description |
+|---|---|
+| `fx` | Focal length along the x-axis in pixels |
+| `fy` | Focal length along the y-axis in pixels |
+| `cx` | Principal point x-coordinate in pixels |
+| `cy` | Principal point y-coordinate in pixels |
+
+**Projection:** `x = fx·u + cx`, `y = fy·v + cy`
+
+**Suitable for:** Cameras with non-square pixels or when calibration provides separate x/y focal lengths. Also the correct choice when working with pre-rectified images.
+
+**Example `camera_model.txt` line:**
+
+```txt
+PINHOLE 1920 1080 1200.0 1198.5 960.0 540.0
+```
+
+</Accordion>
+
+<Accordion title="SIMPLE_RADIAL — ID 2 — 4 parameters">
+
+Pinhole model with a single shared focal length and one radial distortion coefficient. This model is similar to the camera model used by VisualSfM, with the difference that distortion is applied to projections rather than measurements.
+
+**Parameters (in order):** `f, cx, cy, k`
+
+| Parameter | Description |
+|---|---|
+| `f` | Focal length in pixels |
+| `cx` | Principal point x-coordinate in pixels |
+| `cy` | Principal point y-coordinate in pixels |
+| `k` | Radial distortion coefficient |
+
+**Distortion:** `du = u·k·r²`, `dv = v·k·r²` where `r² = u² + v²`
+
+**Suitable for:** Consumer cameras with mild barrel or pincushion distortion. A good starting point when you do not have a prior calibration.
+
+**Example `camera_model.txt` line:**
+
+```txt
+SIMPLE_RADIAL 1920 1080 1200.0 960.0 540.0 -0.05
+```
+
+</Accordion>
+
+<Accordion title="RADIAL — ID 3 — 5 parameters">
+
+Pinhole model with a single focal length and two radial distortion coefficients. This model is equivalent to the Bundler camera model (except Bundler uses an inverted z-axis in camera coordinates).
+
+**Parameters (in order):** `f, cx, cy, k1, k2`
+
+| Parameter | Description |
+|---|---|
+| `f` | Focal length in pixels |
+| `cx` | Principal point x-coordinate in pixels |
+| `cy` | Principal point y-coordinate in pixels |
+| `k1` | First radial distortion coefficient |
+| `k2` | Second radial distortion coefficient |
+
+**Distortion:** `radial = k1·r² + k2·r⁴`, `du = u·radial`, `dv = v·radial`
+
+**Suitable for:** Cameras with moderate radial distortion where `SIMPLE_RADIAL` is insufficient. Compatible with Bundler-format calibrations.
+
+**Example `camera_model.txt` line:**
+
+```txt
+RADIAL 1920 1080 1200.0 960.0 540.0 -0.12 0.04
+```
+
+</Accordion>
+
+<Accordion title="OPENCV — ID 4 — 8 parameters">
+
+Full OpenCV pinhole model with two radial and two tangential (decentering) distortion coefficients up to second degree. Not suitable for large fisheye-type radial distortions.
+
+**Parameters (in order):** `fx, fy, cx, cy, k1, k2, p1, p2`
+
+| Parameter | Description |
+|---|---|
+| `fx` | Focal length along the x-axis in pixels |
+| `fy` | Focal length along the y-axis in pixels |
+| `cx` | Principal point x-coordinate in pixels |
+| `cy` | Principal point y-coordinate in pixels |
+| `k1` | First radial distortion coefficient |
+| `k2` | Second radial distortion coefficient |
+| `p1` | First tangential distortion coefficient |
+| `p2` | Second tangential distortion coefficient |
+
+**Distortion:** `radial = k1·r² + k2·r⁴`; `du = u·radial + 2·p1·uv + p2·(r² + 2u²)`, `dv = v·radial + 2·p2·uv + p1·(r² + 2v²)`
+
+**Suitable for:** Cameras calibrated with OpenCV's `calibrateCamera`. The natural choice when you already have an OpenCV calibration file.
+
+**Example `camera_model.txt` line:**
+
+```txt
+OPENCV 1920 1080 1200.0 1200.0 960.0 540.0 -0.12 0.08 0.0001 -0.0002
+```
+
+</Accordion>
+
+<Accordion title="OPENCV_FISHEYE — ID 5 — 8 parameters">
+
+OpenCV fisheye model based on the equidistant projection. Models large radial distortions with four radial coefficients using the `atan`-based fisheye formulation. Suitable where `OPENCV` is not.
+
+**Parameters (in order):** `fx, fy, cx, cy, k1, k2, k3, k4`
+
+| Parameter | Description |
+|---|---|
+| `fx` | Focal length along the x-axis in pixels |
+| `fy` | Focal length along the y-axis in pixels |
+| `cx` | Principal point x-coordinate in pixels |
+| `cy` | Principal point y-coordinate in pixels |
+| `k1` | First fisheye radial coefficient (θ² term) |
+| `k2` | Second fisheye radial coefficient (θ⁴ term) |
+| `k3` | Third fisheye radial coefficient (θ⁶ term) |
+| `k4` | Fourth fisheye radial coefficient (θ⁸ term) |
+
+**Distortion:** Uses the `atan`-based fisheye projection: `θ = atan(r)`, `θd = θ·(1 + k1·θ² + k2·θ⁴ + k3·θ⁶ + k4·θ⁸)`
+
+**Suitable for:** Wide-angle and fisheye lenses calibrated with OpenCV's `fisheye::calibrate`. Field-of-view up to ~180°.
+
+**Example `camera_model.txt` line:**
+
+```txt
+OPENCV_FISHEYE 1920 1080 800.0 800.0 960.0 540.0 0.1 -0.05 0.01 -0.001
+```
+
+</Accordion>
+
+<Accordion title="FULL_OPENCV — ID 6 — 12 parameters">
+
+The full OpenCV rational distortion model. Extends `OPENCV` with a denominator polynomial (k4, k5, k6) and a higher-order numerator term (k3), enabling accurate calibration of lenses with complex distortion profiles.
+
+**Parameters (in order):** `fx, fy, cx, cy, k1, k2, p1, p2, k3, k4, k5, k6`
+
+| Parameter | Description |
+|---|---|
+| `fx` | Focal length along the x-axis in pixels |
+| `fy` | Focal length along the y-axis in pixels |
+| `cx` | Principal point x-coordinate in pixels |
+| `cy` | Principal point y-coordinate in pixels |
+| `k1` | Radial numerator coefficient (r² term) |
+| `k2` | Radial numerator coefficient (r⁴ term) |
+| `p1` | First tangential coefficient |
+| `p2` | Second tangential coefficient |
+| `k3` | Radial numerator coefficient (r⁶ term) |
+| `k4` | Radial denominator coefficient (r² term) |
+| `k5` | Radial denominator coefficient (r⁴ term) |
+| `k6` | Radial denominator coefficient (r⁶ term) |
+
+**Distortion:** `radial = (1 + k1·r² + k2·r⁴ + k3·r⁶) / (1 + k4·r² + k5·r⁴ + k6·r⁶)`
+
+**Suitable for:** High-precision calibrations where the simpler `OPENCV` model produces residuals. Matches the rational model output of OpenCV's `calibrateCameraRO`.
+
+**Example `camera_model.txt` line:**
+
+```txt
+FULL_OPENCV 1920 1080 1200.0 1200.0 960.0 540.0 -0.12 0.08 0.0 0.0 0.01 0.0 0.0 0.0
+```
+
+</Accordion>
+
+<Accordion title="FOV — ID 7 — 5 parameters">
+
+Field-of-view camera model based on the equidistant model of Devernay and Faugeras (2001). Used by Project Tango for its equidistant calibration type. The single parameter `omega` represents the field of view of the camera.
+
+**Parameters (in order):** `fx, fy, cx, cy, omega`
+
+| Parameter | Description |
+|---|---|
+| `fx` | Focal length along the x-axis in pixels |
+| `fy` | Focal length along the y-axis in pixels |
+| `cx` | Principal point x-coordinate in pixels |
+| `cy` | Principal point y-coordinate in pixels |
+| `omega` | Field-of-view parameter (radians); initialized to `0.01` |
+
+**Distortion:** `factor = atan(r · 2·tan(ω/2)) / (r·ω)` where `r = sqrt(u² + v²)`
+
+**Suitable for:** Cameras calibrated with the Project Tango / equidistant calibration pipeline, or any setup that exports FOV-model parameters.
+
+**Example `camera_model.txt` line:**
+
+```txt
+FOV 1920 1080 900.0 900.0 960.0 540.0 1.2
+```
+
+</Accordion>
+
+<Accordion title="SIMPLE_RADIAL_FISHEYE — ID 8 — 4 parameters">
+
+Fisheye version of `SIMPLE_RADIAL`. Equivalent to `OPENCV_FISHEYE` but with only one radial coefficient. Applies the fisheye `atan` projection before the polynomial distortion.
+
+**Parameters (in order):** `f, cx, cy, k`
+
+| Parameter | Description |
+|---|---|
+| `f` | Focal length in pixels |
+| `cx` | Principal point x-coordinate in pixels |
+| `cy` | Principal point y-coordinate in pixels |
+| `k` | Fisheye radial distortion coefficient (θ² term) |
+
+**Distortion:** `θ = atan(r)`, `θd = θ·(1 + k·θ²)`
+
+**Suitable for:** Wide-angle or fisheye lenses when you want the minimal fisheye parameterization with a single distortion coefficient.
+
+**Example `camera_model.txt` line:**
+
+```txt
+SIMPLE_RADIAL_FISHEYE 1920 1080 800.0 960.0 540.0 0.05
+```
+
+</Accordion>
+
+<Accordion title="RADIAL_FISHEYE — ID 9 — 5 parameters">
+
+Fisheye version of `RADIAL`. Equivalent to `OPENCV_FISHEYE` but with two radial coefficients instead of four.
+
+**Parameters (in order):** `f, cx, cy, k1, k2`
+
+| Parameter | Description |
+|---|---|
+| `f` | Focal length in pixels |
+| `cx` | Principal point x-coordinate in pixels |
+| `cy` | Principal point y-coordinate in pixels |
+| `k1` | First fisheye radial coefficient (θ² term) |
+| `k2` | Second fisheye radial coefficient (θ⁴ term) |
+
+**Distortion:** `θ = atan(r)`, `θd = θ·(1 + k1·θ² + k2·θ⁴)`
+
+**Suitable for:** Fisheye lenses where `SIMPLE_RADIAL_FISHEYE` leaves visible residuals but the full `OPENCV_FISHEYE` model over-fits.
+
+**Example `camera_model.txt` line:**
+
+```txt
+RADIAL_FISHEYE 1920 1080 800.0 960.0 540.0 0.1 -0.02
+```
+
+</Accordion>
+
+<Accordion title="THIN_PRISM_FISHEYE — ID 10 — 12 parameters">
+
+The most comprehensive model. Combines fisheye projection with radial, tangential, and thin-prism distortion as described in Weng et al., *"Camera Calibration with Distortion Models and Accuracy Evaluation"*, TPAMI 1992. The thin-prism terms `sx1` and `sy1` correct for sensor tilt and other higher-order non-radial effects.
+
+**Parameters (in order):** `fx, fy, cx, cy, k1, k2, p1, p2, k3, k4, sx1, sy1`
+
+| Parameter | Description |
+|---|---|
+| `fx` | Focal length along the x-axis in pixels |
+| `fy` | Focal length along the y-axis in pixels |
+| `cx` | Principal point x-coordinate in pixels |
+| `cy` | Principal point y-coordinate in pixels |
+| `k1` | Radial distortion coefficient (r² term) |
+| `k2` | Radial distortion coefficient (r⁴ term) |
+| `p1` | First tangential distortion coefficient |
+| `p2` | Second tangential distortion coefficient |
+| `k3` | Radial distortion coefficient (r⁶ term) |
+| `k4` | Radial distortion coefficient (r⁸ term) |
+| `sx1` | Thin-prism distortion coefficient (x, r² term) |
+| `sy1` | Thin-prism distortion coefficient (y, r² term) |
+
+**Distortion:** `radial = k1·r² + k2·r⁴ + k3·r⁶ + k4·r⁸`; `du = u·radial + 2·p1·uv + p2·(r² + 2u²) + sx1·r²`, `dv = v·radial + 2·p2·uv + p1·(r² + 2v²) + sy1·r²`
+
+**Suitable for:** Research-grade calibrations, scientific cameras, or any scenario demanding maximum accuracy with fisheye optics and potential sensor-plane tilt.
+
+**Example `camera_model.txt` line:**
+
+```txt
+THIN_PRISM_FISHEYE 1920 1080 800.0 800.0 960.0 540.0 0.1 -0.02 0.0 0.0 0.005 0.0 0.0001 -0.0001
+```
+
+</Accordion>
+
+</AccordionGroup>

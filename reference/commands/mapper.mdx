@@ -1,0 +1,282 @@
+---
+title: "mapper"
+description: "Run incremental Structure-from-Motion to produce a sparse 3D reconstruction"
+---
+
+The `mapper` command runs the incremental SfM pipeline: it reads a database of features and matches, initialises a reconstruction from a suitable image set, then incrementally registers additional images, triangulates 3D points, and refines poses via bundle adjustment.
+
+When starting fresh (no `--input_path`), each completed sub-model is written to a numbered sub-directory inside `output_path` (e.g. `output_path/0/`, `output_path/1/`, …) as soon as it finishes. When continuing an existing reconstruction via `--input_path`, the result is written directly to `output_path`.
+
+## Usage
+
+```bash
+ppsfm mapper \
+  --database_path DATABASE \
+  --image_path IMAGES \
+  --output_path MODEL \
+  [options]
+```
+
+## Required options
+
+<ParamField path="database_path" type="string" required>
+  Path to the SQLite database containing features and matches produced by `feature_extractor` and a matching command.
+</ParamField>
+
+<ParamField path="image_path" type="string" required>
+  Path to the root folder containing the input images. Must match the path used during feature extraction.
+</ParamField>
+
+<ParamField path="output_path" type="string" required>
+  Path to an existing directory where the reconstruction(s) will be written. The directory must already exist.
+</ParamField>
+
+## General options
+
+<ParamField path="input_path" type="string">
+  Path to an existing reconstruction directory to continue from. When provided, the mapper registers new images into the loaded reconstruction and writes the result directly to `output_path`. When omitted, a new reconstruction is started from scratch.
+</ParamField>
+
+<ParamField path="image_list_path" type="string">
+  Path to a plain-text file listing image filenames (one per line) to include in the reconstruction. Images not in the list are ignored.
+</ParamField>
+
+## Mapper options
+
+All options below are prefixed `Mapper.` on the command line.
+
+<ParamField path="Mapper.min_num_matches" type="number" default="15">
+  Minimum number of inlier matches for a pair to be considered during reconstruction.
+</ParamField>
+
+<ParamField path="Mapper.ignore_watermarks" type="boolean" default="false">
+  When `true`, inlier matches from detected watermark image pairs are ignored.
+</ParamField>
+
+<ParamField path="Mapper.multiple_models" type="boolean" default="true">
+  Whether to attempt reconstruction of multiple disconnected sub-models when the scene graph is not fully connected.
+</ParamField>
+
+<ParamField path="Mapper.max_num_models" type="number" default="50">
+  Maximum number of sub-models to reconstruct.
+</ParamField>
+
+<ParamField path="Mapper.max_model_overlap" type="number" default="20">
+  Maximum number of shared images allowed between the current model and any previously completed model before reconstruction stops.
+</ParamField>
+
+<ParamField path="Mapper.min_model_size" type="number" default="10">
+  Minimum number of registered images required for a sub-model to be retained. Smaller models are discarded.
+</ParamField>
+
+<ParamField path="Mapper.init_num_trials" type="number" default="200">
+  Number of candidate image pairs to attempt when searching for a good initialisation pair.
+</ParamField>
+
+<ParamField path="Mapper.extract_colors" type="boolean" default="false">
+  Whether to extract and store RGB colours for reconstructed 3D points.
+</ParamField>
+
+<ParamField path="Mapper.num_threads" type="number" default="-1">
+  Number of threads to use during reconstruction. `-1` uses all available cores.
+</ParamField>
+
+<ParamField path="Mapper.min_focal_length_ratio" type="number" default="0.1">
+  Images whose estimated focal length is below `min_focal_length_ratio × max(width, height)` are filtered out.
+</ParamField>
+
+<ParamField path="Mapper.max_focal_length_ratio" type="number" default="10.0">
+  Images whose estimated focal length exceeds `max_focal_length_ratio × max(width, height)` are filtered out.
+</ParamField>
+
+<ParamField path="Mapper.max_extra_param" type="number" default="1.0">
+  Maximum absolute value of any extra (distortion) camera parameter. Images exceeding this threshold are filtered.
+</ParamField>
+
+<ParamField path="Mapper.ba_refine_focal_length" type="boolean" default="false">
+  Whether to optimise the focal length during bundle adjustment.
+</ParamField>
+
+<ParamField path="Mapper.ba_refine_principal_point" type="boolean" default="false">
+  Whether to optimise the principal point during bundle adjustment.
+</ParamField>
+
+<ParamField path="Mapper.ba_refine_extra_params" type="boolean" default="false">
+  Whether to optimise distortion parameters during bundle adjustment.
+</ParamField>
+
+<ParamField path="Mapper.ba_min_num_residuals_for_multi_threading" type="number" default="50000">
+  Minimum number of residuals in a bundle adjustment problem before multi-threaded solving is enabled.
+</ParamField>
+
+<ParamField path="Mapper.ba_local_num_images" type="number" default="6">
+  Number of images included in each local bundle adjustment window.
+</ParamField>
+
+<ParamField path="Mapper.ba_local_max_num_iterations" type="number" default="25">
+  Maximum number of solver iterations for local bundle adjustment.
+</ParamField>
+
+<ParamField path="Mapper.ba_global_images_ratio" type="number" default="1.1">
+  Global bundle adjustment is triggered when the number of registered images grows by this ratio since the last global BA.
+</ParamField>
+
+<ParamField path="Mapper.ba_global_points_ratio" type="number" default="1.1">
+  Global bundle adjustment is triggered when the number of 3D points grows by this ratio since the last global BA.
+</ParamField>
+
+<ParamField path="Mapper.ba_global_images_freq" type="number" default="500">
+  Global bundle adjustment is also triggered every time this many new images are registered.
+</ParamField>
+
+<ParamField path="Mapper.ba_global_points_freq" type="number" default="250000">
+  Global bundle adjustment is also triggered every time this many new 3D points are created.
+</ParamField>
+
+<ParamField path="Mapper.ba_global_max_num_iterations" type="number" default="50">
+  Maximum number of solver iterations for global bundle adjustment.
+</ParamField>
+
+<ParamField path="Mapper.ba_global_max_refinements" type="number" default="5">
+  Maximum number of iterative global bundle adjustment refinements.
+</ParamField>
+
+<ParamField path="Mapper.ba_global_max_refinement_change" type="number" default="0.0005">
+  Global BA refinement stops when the relative cost change drops below this threshold.
+</ParamField>
+
+<ParamField path="Mapper.ba_local_max_refinements" type="number" default="2">
+  Maximum number of iterative local bundle adjustment refinements.
+</ParamField>
+
+<ParamField path="Mapper.ba_local_max_refinement_change" type="number" default="0.001">
+  Local BA refinement stops when the relative cost change drops below this threshold.
+</ParamField>
+
+<ParamField path="Mapper.snapshot_path" type="string">
+  Directory where reconstruction snapshots are saved during the run. Snapshots are not saved when this path is empty.
+</ParamField>
+
+<ParamField path="Mapper.snapshot_images_freq" type="number" default="0">
+  Save a snapshot every time this many images are registered. `0` disables snapshots.
+</ParamField>
+
+<ParamField path="Mapper.fix_existing_images" type="boolean" default="false">
+  When continuing from an existing reconstruction via `--input_path`, keep the poses of already-registered images fixed and only register new images.
+</ParamField>
+
+## Initialisation options
+
+<ParamField path="Mapper.init_min_num_inliers" type="number" default="20">
+  Minimum number of inlier matches required for the initial image set to be accepted.
+</ParamField>
+
+<ParamField path="Mapper.init_max_error" type="number" default="5.0">
+  Maximum reprojection error in pixels for the relative pose estimation used during initialisation.
+</ParamField>
+
+<ParamField path="Mapper.init_min_tri_angle" type="number" default="2.0">
+  Minimum triangulation angle in degrees for initial point triangulation.
+</ParamField>
+
+## Registration options
+
+<ParamField path="Mapper.abs_pose_max_error" type="number" default="12.0">
+  Maximum reprojection error in pixels for absolute pose estimation when registering a new image.
+</ParamField>
+
+<ParamField path="Mapper.abs_pose_min_num_inliers" type="number" default="30">
+  Minimum number of inliers required in absolute pose estimation.
+</ParamField>
+
+<ParamField path="Mapper.abs_pose_min_inlier_ratio" type="number" default="0.25">
+  Minimum inlier ratio required in absolute pose estimation.
+</ParamField>
+
+<ParamField path="Mapper.filter_max_reproj_error" type="number" default="4.0">
+  Maximum reprojection error in pixels for a 3D point observation to be kept after filtering.
+</ParamField>
+
+<ParamField path="Mapper.filter_min_tri_angle" type="number" default="1.5">
+  Minimum triangulation angle in degrees for a 3D point to be kept after filtering.
+</ParamField>
+
+<ParamField path="Mapper.max_reg_trials" type="number" default="3">
+  Maximum number of times the mapper tries to register a given image before giving up on it.
+</ParamField>
+
+## Triangulation options
+
+<ParamField path="Mapper.tri_max_transitivity" type="number">
+  Maximum transitivity depth when completing tracks.
+</ParamField>
+
+<ParamField path="Mapper.tri_create_max_angle_error" type="number">
+  Maximum angular error (degrees) allowed when creating a new 3D point.
+</ParamField>
+
+<ParamField path="Mapper.tri_continue_max_angle_error" type="number">
+  Maximum angular error allowed when extending an existing track.
+</ParamField>
+
+<ParamField path="Mapper.tri_merge_max_reproj_error" type="number">
+  Maximum reprojection error when merging two 3D tracks.
+</ParamField>
+
+<ParamField path="Mapper.tri_complete_max_reproj_error" type="number">
+  Maximum reprojection error when completing tracks after bundle adjustment.
+</ParamField>
+
+<ParamField path="Mapper.tri_complete_max_transitivity" type="number">
+  Maximum transitivity depth when completing tracks after bundle adjustment.
+</ParamField>
+
+<ParamField path="Mapper.tri_re_max_angle_error" type="number">
+  Maximum angular error when re-triangulating a point.
+</ParamField>
+
+<ParamField path="Mapper.tri_re_min_ratio" type="number">
+  Minimum inlier ratio required during re-triangulation.
+</ParamField>
+
+<ParamField path="Mapper.tri_re_max_trials" type="number">
+  Maximum number of re-triangulation attempts per point.
+</ParamField>
+
+<ParamField path="Mapper.tri_min_angle" type="number">
+  Minimum triangulation angle in degrees for a point to be created.
+</ParamField>
+
+<ParamField path="Mapper.tri_ignore_two_view_tracks" type="boolean">
+  When `true`, tracks visible in only two images are ignored during triangulation.
+</ParamField>
+
+## Example
+
+Run a fresh reconstruction and write results to `results/sparse`:
+
+```bash
+ppsfm mapper \
+  --database_path data/database.db \
+  --image_path data/images \
+  --output_path results/sparse
+```
+
+Continue an existing reconstruction with fixed existing poses:
+
+```bash
+ppsfm mapper \
+  --database_path data/database.db \
+  --image_path data/images \
+  --input_path results/sparse/0 \
+  --output_path results/sparse/0 \
+  --Mapper.fix_existing_images 1
+```
+
+<Note>
+  When starting a fresh reconstruction, sub-models are written incrementally as each one completes. If the process is interrupted, any already-completed models are preserved on disk.
+</Note>
+
+<Tip>
+  For video sequences, set `data_type` to `video` via `automatic_reconstructor` or manually tune `Mapper.ba_global_images_ratio` to a higher value (e.g. `1.4`) to reduce the frequency of expensive global bundle adjustments.
+</Tip>

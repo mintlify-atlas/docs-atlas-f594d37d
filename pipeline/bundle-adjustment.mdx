@@ -1,0 +1,129 @@
+---
+title: "Bundle adjustment"
+description: "Refine camera poses and 3D point positions using global bundle adjustment with Ceres Solver."
+---
+
+Bundle adjustment (BA) is a non-linear optimization that refines camera poses and 3D point positions simultaneously by minimizing the total reprojection error across all observations. PP-SfM uses [Ceres Solver](http://ceres-solver.org) as its backend for both local and global BA.
+
+<Note>
+  Bundle adjustment runs automatically during incremental reconstruction. The mapper performs local BA after every newly registered image and triggers global BA at configured intervals. You only need to run `ppsfm bundle_adjuster` explicitly if you want to refine an already-completed reconstruction.
+</Note>
+
+## When to run standalone bundle adjustment
+
+You may want to run the standalone `bundle_adjuster` command when:
+
+- You imported a reconstruction from an external source and want to refine it.
+- You paused reconstruction and want to apply a full global refinement before continuing.
+- The automatic BA during mapping used conservative settings and you want a final high-quality pass.
+- You changed camera intrinsic refinement flags (`refine_focal_length`, `refine_extra_params`) after the fact.
+
+## How bundle adjustment works
+
+The `BundleAdjustmentController` reads a reconstruction from `--input_path`, constructs a Ceres problem over all registered cameras and 3D points, and solves it with the Levenberg–Marquardt algorithm. After the solve completes, the refined reconstruction is written to `--output_path`.
+
+The loss function is configurable:
+
+- **Trivial** (default) — standard squared residuals, sensitive to outliers.
+- **Soft L1** — a smooth approximation of L1; more robust to moderate outliers.
+- **Cauchy** — a heavily-tailed robust loss; best when outliers are common.
+
+All camera parameters (focal length, principal point, distortion) can optionally be refined alongside the extrinsics.
+
+## Command
+
+```bash
+ppsfm bundle_adjuster \
+  --input_path INPUT \
+  --output_path OUTPUT \
+  [options]
+```
+
+### Path options
+
+<ParamField path="--input_path" type="string" required>
+  Path to a directory containing a reconstruction to refine (`cameras.bin`, `images.bin`, `points3D.bin`). Must be an existing directory.
+</ParamField>
+
+<ParamField path="--output_path" type="string" required>
+  Path to a directory where the refined reconstruction is written. Must be an existing directory.
+</ParamField>
+
+### Bundle adjustment options (`--BundleAdjustment.*`)
+
+<ParamField path="--BundleAdjustment.loss_function_type" type="string" default="TRIVIAL">
+  Type of loss function applied to reprojection residuals. One of `TRIVIAL`, `SOFT_L1`, or `CAUCHY`. Use `SOFT_L1` or `CAUCHY` to reduce the influence of outlier observations.
+</ParamField>
+
+<ParamField path="--BundleAdjustment.loss_function_scale" type="float" default="1.0">
+  Scaling factor for the loss function. Residuals below this scale are treated as inliers; larger residuals are down-weighted according to the chosen loss function type.
+</ParamField>
+
+<ParamField path="--BundleAdjustment.refine_focal_length" type="bool" default="false">
+  Optimize the focal length parameter of each camera during bundle adjustment.
+</ParamField>
+
+<ParamField path="--BundleAdjustment.refine_principal_point" type="bool" default="false">
+  Optimize the principal point (cx, cy) of each camera.
+</ParamField>
+
+<ParamField path="--BundleAdjustment.refine_extra_params" type="bool" default="false">
+  Optimize distortion coefficients and any other extra camera parameters.
+</ParamField>
+
+<ParamField path="--BundleAdjustment.refine_extrinsics" type="bool" default="true">
+  Optimize camera rotation and translation (extrinsics). Disable this to refine only intrinsics while holding poses fixed.
+</ParamField>
+
+<ParamField path="--BundleAdjustment.print_summary" type="bool" default="true">
+  Print a Ceres Solver summary with convergence statistics after each solve.
+</ParamField>
+
+<ParamField path="--BundleAdjustment.min_num_residuals_for_multi_threading" type="int" default="50000">
+  Minimum number of residuals in the problem before enabling multi-threaded Ceres solving. Single-threaded solving has lower overhead for small problems.
+</ParamField>
+
+## Ceres Solver defaults
+
+The Ceres solver is configured with the following defaults:
+
+| Parameter | Default |
+|---|---|
+| `max_num_iterations` | 100 |
+| `max_linear_solver_iterations` | 200 |
+| `max_consecutive_nonmonotonic_steps` | 10 |
+| `function_tolerance` | 0.0 (disabled) |
+| `gradient_tolerance` | 0.0 (disabled) |
+| `parameter_tolerance` | 0.0 (disabled) |
+
+Tolerance termination criteria are disabled by default, meaning the solver always runs for the maximum number of iterations unless it converges naturally.
+
+## Automatic BA during incremental reconstruction
+
+During `ppsfm mapper`, the `IncrementalMapperController` runs two levels of bundle adjustment automatically:
+
+**Local bundle adjustment** runs after every newly registered image. It refines the `--Mapper.ba_local_num_images` most recently registered images (default: 6) along with their visible 3D points.
+
+**Global bundle adjustment** is triggered by growth thresholds:
+
+- When registered image count grows by `--Mapper.ba_global_images_ratio` (default: 1.1×) since last global BA.
+- When 3D point count grows by `--Mapper.ba_global_points_ratio` (default: 1.1×) since last global BA.
+- Every `--Mapper.ba_global_images_freq` registered images (default: 500).
+- Every `--Mapper.ba_global_points_freq` new 3D points (default: 250,000).
+
+<Tip>
+  If you need maximum accuracy, run `ppsfm bundle_adjuster` as a final pass after `ppsfm mapper` completes. This lets you apply a robust loss function or enable intrinsic refinement without affecting the incremental mapping process.
+</Tip>
+
+## Example
+
+```bash
+# Refine a completed reconstruction with a robust Cauchy loss
+ppsfm bundle_adjuster \
+  --input_path ./output/0 \
+  --output_path ./output/0_refined \
+  --BundleAdjustment.loss_function_type CAUCHY \
+  --BundleAdjustment.loss_function_scale 1.0 \
+  --BundleAdjustment.refine_focal_length false \
+  --BundleAdjustment.refine_extra_params false
+```
