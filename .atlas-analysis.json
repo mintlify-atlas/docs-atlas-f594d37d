@@ -1,0 +1,109 @@
+{
+  "projectType": "ai-ml",
+  "projectName": "Privacy Preserving Structure-from-Motion",
+  "projectDescription": "A modified COLMAP pipeline that enables privacy-preserving 3D reconstruction by replacing standard keypoint positions with line features to hide dynamic image content from processing servers.",
+  "theme": "palm",
+  "primaryColor": "#d4b46c",
+  "lightColor": "#8c7c54",
+  "darkColor": "#ffffff",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "introduction",
+              "concepts/privacy-preserving-sfm",
+              "concepts/line-features"
+            ]
+          },
+          {
+            "group": "Getting Started",
+            "pages": [
+              "getting-started/installation",
+              "getting-started/quickstart",
+              "getting-started/datasets"
+            ]
+          },
+          {
+            "group": "Pipeline Guide",
+            "pages": [
+              "pipeline/overview",
+              "pipeline/feature-extraction",
+              "pipeline/feature-matching",
+              "pipeline/reconstruction",
+              "pipeline/bundle-adjustment"
+            ]
+          },
+          {
+            "group": "File Formats",
+            "pages": [
+              "formats/gravity-direction",
+              "formats/camera-calibration",
+              "formats/reconstruction-output"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Reference",
+        "groups": [
+          {
+            "group": "Commands",
+            "pages": [
+              "reference/commands/gui",
+              "reference/commands/feature-extractor",
+              "reference/commands/exhaustive-matcher",
+              "reference/commands/sequential-matcher",
+              "reference/commands/mapper",
+              "reference/commands/line-initializer",
+              "reference/commands/bundle-adjuster",
+              "reference/commands/automatic-reconstructor"
+            ]
+          },
+          {
+            "group": "Camera Models",
+            "pages": [
+              "reference/camera-models"
+            ]
+          },
+          {
+            "group": "Build Configuration",
+            "pages": [
+              "reference/build-options"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Privacy-preserving 3D reconstruction using line features instead of keypoints",
+    "Gravity-aligned line feature extraction to constrain reconstruction",
+    "Incremental Structure-from-Motion pipeline based on COLMAP",
+    "4-view initialization using aligned and unaligned line tracks",
+    "Support for GPU-accelerated SIFT feature extraction via CUDA",
+    "Multiple camera models (OPENCV, SIMPLE_RADIAL, FULL_OPENCV, etc.)",
+    "GUI interface and CLI commands for full pipeline control",
+    "Bundle adjustment with line-based reprojection error"
+  ],
+  "publicApiSurface": [
+    "ppsfm gui",
+    "ppsfm feature_extractor",
+    "ppsfm exhaustive_matcher",
+    "ppsfm sequential_matcher",
+    "ppsfm mapper",
+    "ppsfm line_initializer",
+    "ppsfm bundle_adjuster",
+    "ppsfm automatic_reconstructor",
+    "ppsfm database_creator",
+    "ppsfm image_filterer",
+    "ppsfm project_generator",
+    "init::initialize_reconstruction()",
+    "FeatureLine / FeatureLines types",
+    "IncrementalMapperController",
+    "AutomaticReconstructionController"
+  ]
+}
