@@ -145,7 +145,7 @@ max_num_models=50
 ...
 ```
 
-You can pass this file back to the mapper with `--project_path project.ini` to resume reconstruction with the same settings.
+This file is written automatically by the mapper alongside each reconstruction. It records the options used so you can reproduce or continue the run.
 
 ## Reading a reconstruction in code
 
@@ -162,4 +162,4 @@ reconstruction.Read("/path/to/output/0");
 reconstruction.WriteText("/path/to/output/0");
 ```
 
-The `Read` method looks for `cameras.txt`, `images.txt`, and `points3D.txt` in the given directory and calls `ReadText` internally. If those files are absent, it will abort with a fatal error.
+The `Read` method looks for `cameras.txt`, `images.txt`, and `points3D.txt` in the given directory. If those files are present it calls `ReadText`; if they are absent it aborts with a fatal error. This repository only supports the text format — there is no binary read/write path.

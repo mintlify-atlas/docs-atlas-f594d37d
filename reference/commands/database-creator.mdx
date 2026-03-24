@@ -1,0 +1,30 @@
+---
+title: "database_creator"
+description: "Create a new empty PP-SfM database file"
+---
+
+The `database_creator` command creates a new, empty SQLite database at the specified path. The database is used by all subsequent pipeline stages — feature extraction writes to it, matchers read and write to it, and the mapper reads from it.
+
+## Usage
+
+```bash
+ppsfm database_creator --database_path DATABASE
+```
+
+## Required options
+
+<ParamField path="database_path" type="string" required>
+  Path where the new SQLite database file will be created. The parent directory must already exist. If a file already exists at this path, it is opened rather than overwritten.
+</ParamField>
+
+## Example
+
+Create a database at `data/database.db`:
+
+```bash
+ppsfm database_creator --database_path data/database.db
+```
+
+<Note>
+  You do not need to run `database_creator` explicitly before feature extraction. The `feature_extractor` command creates the database automatically if it does not exist. Use `database_creator` when you want to create an empty database first — for example to inspect its schema or to pre-register cameras.
+</Note>

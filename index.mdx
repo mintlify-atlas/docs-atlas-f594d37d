@@ -1,97 +1,45 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "Privacy Preserving SfM"
+description: "3D reconstruction that protects image content from processing servers"
 ---
 
-## Setting up
+## Privacy Preserving Structure-from-Motion
 
-Get your documentation site up and running in minutes.
+PP-SfM is a modified COLMAP pipeline from the [Computer Vision and Geometry Group](http://www.cvg.ethz.ch) at ETH Zurich. It enables 3D reconstruction while protecting image privacy by replacing standard keypoint positions with **line features** — so a reconstruction server never sees exact pixel locations of people, vehicles, or other sensitive content.
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Installation" icon="wrench" href="/getting-started/installation">
+    Build PP-SfM from source on Ubuntu 18.04
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Quickstart" icon="rocket" href="/getting-started/quickstart">
+    Prepare your data and run your first reconstruction
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="Pipeline Guide" icon="diagram-project" href="/pipeline/overview">
+    Walk through every stage of the privacy-preserving pipeline
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="Command Reference" icon="terminal" href="/reference/commands/gui">
+    Complete reference for all CLI commands
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## How it works
 
-Everything you need to create world-class documentation.
+Instead of sending keypoint pixel coordinates `(x, y)` to a server, PP-SfM converts each keypoint to a line `l = (a, b, c)^T` satisfying `ax + by + c = 0`. The line passes through the original keypoint, but the exact position remains on the client.
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+Lines whose orientation is parallel to the gravity direction are flagged as **gravity-aligned** and provide stronger reconstruction constraints. The pipeline uses a 4-view initialization that requires both aligned and unaligned tracks.
 
-## Need inspiration?
+<Note>
+  Gravity direction and camera calibration files must be provided alongside each image. See the [Quickstart](/getting-started/quickstart) for the required file format.
+</Note>
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+## Citation
+
+```bibtex
+@inproceedings{Geppert2020ECCV,
+  author    = {Marcel Geppert and Viktor Larsson and Pablo Speciale and
+               Johannes L. Sch{\"{o}}nberger and Marc Pollefeys},
+  title     = {Privacy Preserving Structure-from-Motion},
+  booktitle = {European Conference on Computer Vision (ECCV)},
+  year      = {2020},
+}
+```

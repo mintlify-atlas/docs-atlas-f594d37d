@@ -27,19 +27,19 @@ All models use the convention that the upper-left image corner is `(0, 0)` and t
 
 ## Using a model name in `camera_model.txt`
 
-When you provide a known camera calibration, write one line per camera in the following format:
+When you provide a known camera calibration via a per-image sidecar file, write one line in the following format:
 
 ```txt
-<model_name> <width> <height> <param1> <param2> ...
+<model_name> <param1>, <param2>, ...
 ```
 
-For example, a 1920×1080 camera calibrated with the OpenCV model:
+The model name is followed by the intrinsic parameters as **comma-separated** values. For example, using the OPENCV model:
 
 ```txt
-OPENCV 1920 1080 1200.0 1200.0 960.0 540.0 -0.12 0.08 0.0001 -0.0002
+OPENCV 2575.939766, 2608.293891, 1599.263118, 1257.125449, 0.141865, -0.465301, 0.000000, 0.000000
 ```
 
-The parameters must appear in exactly the order listed for each model below.
+The parameters must appear in exactly the order listed for each model below. Image width and height are read from the image file itself — do not include them in the calibration file.
 
 ## Model details
 
@@ -64,7 +64,7 @@ A distortion-free pinhole camera with a single shared focal length for both axes
 **Example `camera_model.txt` line:**
 
 ```txt
-SIMPLE_PINHOLE 1920 1080 1200.0 960.0 540.0
+SIMPLE_PINHOLE 1200.0, 960.0, 540.0
 ```
 
 </Accordion>
@@ -89,7 +89,7 @@ A distortion-free pinhole camera with independent focal lengths for the x and y 
 **Example `camera_model.txt` line:**
 
 ```txt
-PINHOLE 1920 1080 1200.0 1198.5 960.0 540.0
+PINHOLE 1200.0, 1198.5, 960.0, 540.0
 ```
 
 </Accordion>
@@ -114,7 +114,7 @@ Pinhole model with a single shared focal length and one radial distortion coeffi
 **Example `camera_model.txt` line:**
 
 ```txt
-SIMPLE_RADIAL 1920 1080 1200.0 960.0 540.0 -0.05
+SIMPLE_RADIAL 1200.0, 960.0, 540.0, -0.05
 ```
 
 </Accordion>
@@ -140,7 +140,7 @@ Pinhole model with a single focal length and two radial distortion coefficients.
 **Example `camera_model.txt` line:**
 
 ```txt
-RADIAL 1920 1080 1200.0 960.0 540.0 -0.12 0.04
+RADIAL 1200.0, 960.0, 540.0, -0.12, 0.04
 ```
 
 </Accordion>
@@ -169,7 +169,7 @@ Full OpenCV pinhole model with two radial and two tangential (decentering) disto
 **Example `camera_model.txt` line:**
 
 ```txt
-OPENCV 1920 1080 1200.0 1200.0 960.0 540.0 -0.12 0.08 0.0001 -0.0002
+OPENCV 2575.939766, 2608.293891, 1599.263118, 1257.125449, 0.141865, -0.465301, 0.000000, 0.000000
 ```
 
 </Accordion>
@@ -198,7 +198,7 @@ OpenCV fisheye model based on the equidistant projection. Models large radial di
 **Example `camera_model.txt` line:**
 
 ```txt
-OPENCV_FISHEYE 1920 1080 800.0 800.0 960.0 540.0 0.1 -0.05 0.01 -0.001
+OPENCV_FISHEYE 800.0, 800.0, 960.0, 540.0, 0.1, -0.05, 0.01, -0.001
 ```
 
 </Accordion>
@@ -231,7 +231,7 @@ The full OpenCV rational distortion model. Extends `OPENCV` with a denominator p
 **Example `camera_model.txt` line:**
 
 ```txt
-FULL_OPENCV 1920 1080 1200.0 1200.0 960.0 540.0 -0.12 0.08 0.0 0.0 0.01 0.0 0.0 0.0
+FULL_OPENCV 1200.0, 1200.0, 960.0, 540.0, -0.12, 0.08, 0.0, 0.0, 0.01, 0.0, 0.0, 0.0
 ```
 
 </Accordion>
@@ -257,7 +257,7 @@ Field-of-view camera model based on the equidistant model of Devernay and Fauger
 **Example `camera_model.txt` line:**
 
 ```txt
-FOV 1920 1080 900.0 900.0 960.0 540.0 1.2
+FOV 900.0, 900.0, 960.0, 540.0, 1.2
 ```
 
 </Accordion>
@@ -282,7 +282,7 @@ Fisheye version of `SIMPLE_RADIAL`. Equivalent to `OPENCV_FISHEYE` but with only
 **Example `camera_model.txt` line:**
 
 ```txt
-SIMPLE_RADIAL_FISHEYE 1920 1080 800.0 960.0 540.0 0.05
+SIMPLE_RADIAL_FISHEYE 800.0, 960.0, 540.0, 0.05
 ```
 
 </Accordion>
@@ -308,7 +308,7 @@ Fisheye version of `RADIAL`. Equivalent to `OPENCV_FISHEYE` but with two radial 
 **Example `camera_model.txt` line:**
 
 ```txt
-RADIAL_FISHEYE 1920 1080 800.0 960.0 540.0 0.1 -0.02
+RADIAL_FISHEYE 800.0, 960.0, 540.0, 0.1, -0.02
 ```
 
 </Accordion>
@@ -341,7 +341,7 @@ The most comprehensive model. Combines fisheye projection with radial, tangentia
 **Example `camera_model.txt` line:**
 
 ```txt
-THIN_PRISM_FISHEYE 1920 1080 800.0 800.0 960.0 540.0 0.1 -0.02 0.0 0.0 0.005 0.0 0.0001 -0.0001
+THIN_PRISM_FISHEYE 800.0, 800.0, 960.0, 540.0, 0.1, -0.02, 0.0, 0.0, 0.005, 0.0, 0.0001, -0.0001
 ```
 
 </Accordion>

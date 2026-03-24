@@ -71,13 +71,16 @@
             "group": "Commands",
             "pages": [
               "reference/commands/gui",
+              "reference/commands/automatic-reconstructor",
               "reference/commands/feature-extractor",
               "reference/commands/exhaustive-matcher",
               "reference/commands/sequential-matcher",
               "reference/commands/mapper",
               "reference/commands/line-initializer",
               "reference/commands/bundle-adjuster",
-              "reference/commands/automatic-reconstructor"
+              "reference/commands/database-creator",
+              "reference/commands/image-filterer",
+              "reference/commands/project-generator"
             ]
           },
           {

@@ -1,0 +1,78 @@
+---
+title: "image_filterer"
+description: "Remove images with degenerate camera parameters or too few 3D observations from a reconstruction"
+---
+
+The `image_filterer` command reads an existing reconstruction, de-registers images that fail quality thresholds, and writes the filtered result to a new directory. It is useful for cleaning up a reconstruction that contains images with bad camera estimates before using it as input to further processing.
+
+Two kinds of filtering are applied:
+
+1. **Camera parameter filtering** — images whose focal length ratio or extra distortion parameter magnitude falls outside the specified thresholds are removed.
+2. **Observation count filtering** — registered images with fewer than `min_num_observations` triangulated 3D points are de-registered.
+
+## Usage
+
+```bash
+ppsfm image_filterer \
+  --input_path INPUT \
+  --output_path OUTPUT \
+  [options]
+```
+
+## Required options
+
+<ParamField path="input_path" type="string" required>
+  Path to an existing reconstruction directory containing `cameras.txt`, `images.txt`, and `points3D.txt`.
+</ParamField>
+
+<ParamField path="output_path" type="string" required>
+  Path to the directory where the filtered reconstruction will be written. The directory must already exist.
+</ParamField>
+
+## Filtering options
+
+<ParamField path="min_focal_length_ratio" type="number" default="0.1">
+  Images whose estimated focal length is below `min_focal_length_ratio × max(width, height)` are removed.
+</ParamField>
+
+<ParamField path="max_focal_length_ratio" type="number" default="10.0">
+  Images whose estimated focal length exceeds `max_focal_length_ratio × max(width, height)` are removed.
+</ParamField>
+
+<ParamField path="max_extra_param" type="number" default="100.0">
+  Images whose camera has any extra (distortion) parameter with absolute value greater than this threshold are removed.
+</ParamField>
+
+<ParamField path="min_num_observations" type="number" default="10">
+  Registered images with fewer than this many triangulated 3D point observations are de-registered.
+</ParamField>
+
+## Example
+
+Filter a reconstruction and write the result to a new directory:
+
+```bash
+ppsfm image_filterer \
+  --input_path results/sparse/0 \
+  --output_path results/sparse/0_filtered
+```
+
+Apply stricter thresholds for a cleaner result:
+
+```bash
+ppsfm image_filterer \
+  --input_path results/sparse/0 \
+  --output_path results/sparse/0_filtered \
+  --min_focal_length_ratio 0.3 \
+  --max_focal_length_ratio 5.0 \
+  --max_extra_param 1.0 \
+  --min_num_observations 30
+```
+
+<Note>
+  The filtered reconstruction is written in text format (`cameras.txt`, `images.txt`, `points3D.txt`). The command prints how many images were removed from the total.
+</Note>
+
+<Tip>
+  Run `image_filterer` after `mapper` to remove outlier images before using the reconstruction as input to further analysis or visualization.
+</Tip>

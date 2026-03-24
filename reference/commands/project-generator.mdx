@@ -1,0 +1,55 @@
+---
+title: "project_generator"
+description: "Write a project configuration file with all options set to a given quality preset"
+---
+
+The `project_generator` command creates a `project.ini` configuration file containing all pipeline options pre-configured for a chosen quality level. You can use this file as a starting point to tune reconstruction parameters, or pass it to the mapper or GUI to run with a known configuration.
+
+## Usage
+
+```bash
+ppsfm project_generator \
+  --output_path OUTPUT.ini \
+  [--quality QUALITY]
+```
+
+## Required options
+
+<ParamField path="output_path" type="string" required>
+  Path where the generated configuration file will be written (e.g. `project.ini`).
+</ParamField>
+
+## Optional options
+
+<ParamField path="quality" type="string" default="high">
+  Quality preset to use when setting option values. Controls feature extraction, matching, and bundle adjustment parameters.
+
+  | Value | Description |
+  |-------|-------------|
+  | `low` | Fastest preset. Smaller max image size, fewer BA iterations. |
+  | `medium` | Balanced preset. |
+  | `high` | Default. Affine SIFT shape estimation, larger max image size, more BA iterations. |
+  | `extreme` | Highest quality. Affine SIFT and domain-size pooling enabled, maximum BA iterations. |
+</ParamField>
+
+## Example
+
+Generate a high-quality project file:
+
+```bash
+ppsfm project_generator --output_path high_quality.ini
+```
+
+Generate a low-quality project file for fast prototyping:
+
+```bash
+ppsfm project_generator --output_path fast.ini --quality low
+```
+
+<Tip>
+  Inspect the generated `.ini` file to see all available options and their quality-preset values. This is a convenient way to discover tunable parameters without reading the source code.
+</Tip>
+
+<Note>
+  The generated file uses the same INI format that the mapper writes alongside each reconstruction. You can edit the values manually and load the file in the GUI to apply a custom configuration.
+</Note>
